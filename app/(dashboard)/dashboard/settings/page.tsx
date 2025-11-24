@@ -8,8 +8,8 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-6xl flex flex-col gap-6">
       <div>
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Manage your account and store settings</p>
+        <h1 className="text-2xl font-medium">Settings</h1>
+        <p className="text-sm font-normal text-muted-foreground">Manage your account and store settings</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-4">

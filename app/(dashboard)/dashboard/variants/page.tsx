@@ -17,8 +17,8 @@ export default function VariantsPage() {
     <div className="mx-auto max-w-6xl flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Variants</h1>
-          <p className="text-muted-foreground">Manage product variant options</p>
+          <h1 className="text-2xl font-medium">Variants</h1>
+          <p className="text-sm font-normal text-muted-foreground">Manage product variant options</p>
         </div>
         <Button>
           <Plus className="mr-2 h-4 w-4" />

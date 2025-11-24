@@ -107,9 +107,9 @@ export function DashboardSidebar() {
   const pathname = usePathname()
 
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b px-4 py-4">
-        <Link href="/dashboard" className="flex items-center">
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="!flex !flex-row h-16 border-b px-4 items-center justify-start group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center">
+        <Link href="/dashboard" className="flex items-center group-data-[collapsible=icon]:hidden">
           <Logo className="h-7 w-auto" />
         </Link>
       </SidebarHeader>
@@ -124,6 +124,7 @@ export function DashboardSidebar() {
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === item.url}
+                      tooltip={item.title}
                     >
                       <Link href={item.url}>
                         <item.icon className="h-4 w-4" weight={pathname === item.url ? "fill" : "regular"} />
@@ -140,7 +141,7 @@ export function DashboardSidebar() {
       <SidebarFooter className="border-t">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton asChild tooltip="Sign Out">
               <button className="w-full">
                 <SignOut className="h-4 w-4" />
                 <span>Sign Out</span>

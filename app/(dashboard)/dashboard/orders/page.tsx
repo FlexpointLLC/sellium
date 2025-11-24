@@ -25,8 +25,8 @@ export default function OrdersPage() {
     <div className="mx-auto max-w-6xl flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Orders</h1>
-          <p className="text-muted-foreground">View and manage customer orders</p>
+          <h1 className="text-2xl font-medium">Orders</h1>
+          <p className="text-sm font-normal text-muted-foreground">View and manage customer orders</p>
         </div>
       </div>
 

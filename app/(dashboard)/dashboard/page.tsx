@@ -7,8 +7,8 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl font-medium">Dashboard</h1>
+        <p className="text-sm font-normal text-muted-foreground">
           Welcome back! Here&apos;s an overview of your store.
         </p>
       </div>

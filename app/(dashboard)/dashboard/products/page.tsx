@@ -18,8 +18,8 @@ export default function ProductsPage() {
     <div className="mx-auto max-w-6xl flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Products</h1>
-          <p className="text-muted-foreground">Manage your product inventory</p>
+          <h1 className="text-2xl font-medium">Products</h1>
+          <p className="text-sm font-normal text-muted-foreground">Manage your product inventory</p>
         </div>
         <Button>
           <Plus className="mr-2 h-4 w-4" />

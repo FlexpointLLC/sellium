@@ -17,8 +17,8 @@ export default function CategoriesPage() {
     <div className="mx-auto max-w-6xl flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Categories</h1>
-          <p className="text-muted-foreground">Manage your product categories</p>
+          <h1 className="text-2xl font-medium">Categories</h1>
+          <p className="text-sm font-normal text-muted-foreground">Manage your product categories</p>
         </div>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
