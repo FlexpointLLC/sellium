@@ -49,6 +49,7 @@ interface Product {
   stock: number
   status: string
   image_url: string | null
+  images?: string[]
   category_id: string | null
   has_variants: boolean
   variant_count?: number
@@ -123,13 +124,14 @@ export default function ProductsPage() {
     status: "draft",
     category_id: "",
     has_variants: false,
-    image_url: ""
+    image_url: "",
+    images: [] as string[]
   })
   
-  // Image upload states
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string>("")
-  const [uploadingImage, setUploadingImage] = useState(false)
+  // Image upload states - support multiple images
+  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
+  const [uploadingImages, setUploadingImages] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   // Variant options
@@ -250,7 +252,8 @@ export default function ProductsPage() {
       status: "draft",
       category_id: "",
       has_variants: false,
-      image_url: ""
+      image_url: "",
+      images: []
     })
     setProductOptions([])
     setGeneratedVariants([])
@@ -262,36 +265,57 @@ export default function ProductsPage() {
   }
 
   function handleImageSelect(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (!file) return
+    const files = event.target.files
+    if (!files || files.length === 0) return
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      alert("Please select an image file")
-      return
-    }
+    const newFiles: File[] = []
+    const newPreviews: string[] = []
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image size should be less than 5MB")
-      return
-    }
+    Array.from(files).forEach(file => {
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        alert(`${file.name} is not an image file`)
+        return
+      }
 
-    setImageFile(file)
+      // Validate file size (max 5MB per file)
+      if (file.size > 5 * 1024 * 1024) {
+        alert(`${file.name} is too large. Max 5MB per image.`)
+        return
+      }
+
+      // Limit total images to 10
+      if (imageFiles.length + formData.images.length + newFiles.length >= 10) {
+        alert("Maximum 10 images allowed per product")
+        return
+      }
+
+      newFiles.push(file)
+      
+      // Create preview
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        newPreviews.push(reader.result as string)
+        if (newPreviews.length === newFiles.length) {
+          setImagePreviews([...imagePreviews, ...newPreviews])
+        }
+      }
+      reader.readAsDataURL(file)
+    })
+
+    setImageFiles([...imageFiles, ...newFiles])
     
-    // Create preview
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string)
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
     }
-    reader.readAsDataURL(file)
   }
 
-  async function uploadImage(file: File, productSlug: string): Promise<string | null> {
+  async function uploadImage(file: File, productSlug: string, index: number): Promise<string | null> {
     if (!store) return null
 
     const fileExt = file.name.split('.').pop()
-    const fileName = `${store.id}/products/${productSlug}-${Date.now()}.${fileExt}`
+    const fileName = `${store.id}/products/${productSlug}-${Date.now()}-${index}.${fileExt}`
 
     const { data, error } = await supabase.storage
       .from('Sellium')
@@ -313,18 +337,46 @@ export default function ProductsPage() {
     return publicUrl
   }
 
-  function removeImage() {
-    setFormData({ ...formData, image_url: "" })
-    setImageFile(null)
-    setImagePreview("")
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
+  async function uploadAllImages(productSlug: string): Promise<string[]> {
+    const uploadedUrls: string[] = []
+    
+    for (let i = 0; i < imageFiles.length; i++) {
+      const url = await uploadImage(imageFiles[i], productSlug, i)
+      if (url) {
+        uploadedUrls.push(url)
+      }
     }
+    
+    return uploadedUrls
+  }
+
+  function removeNewImage(index: number) {
+    setImageFiles(imageFiles.filter((_, i) => i !== index))
+    setImagePreviews(imagePreviews.filter((_, i) => i !== index))
+  }
+
+  function removeExistingImage(index: number) {
+    const newImages = formData.images.filter((_, i) => i !== index)
+    setFormData({ 
+      ...formData, 
+      images: newImages,
+      image_url: newImages.length > 0 ? newImages[0] : ""
+    })
+  }
+
+  function setMainImage(imageUrl: string) {
+    // Move this image to be the first (main) image
+    const otherImages = formData.images.filter(img => img !== imageUrl)
+    setFormData({
+      ...formData,
+      images: [imageUrl, ...otherImages],
+      image_url: imageUrl
+    })
   }
 
   function resetImageState() {
-    setImageFile(null)
-    setImagePreview("")
+    setImageFiles([])
+    setImagePreviews([])
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -492,16 +544,15 @@ export default function ProductsPage() {
     const sku = formData.sku.trim() || null
     const productSlug = formData.slug || generateSlug(formData.name)
     
-    // Upload image if selected
-    let imageUrl: string | null = formData.image_url || null
-    if (imageFile) {
-      setUploadingImage(true)
-      const newImageUrl = await uploadImage(imageFile, productSlug)
-      if (newImageUrl) {
-        imageUrl = newImageUrl
-      }
-      setUploadingImage(false)
+    // Upload new images if selected
+    let allImages = [...formData.images]
+    if (imageFiles.length > 0) {
+      setUploadingImages(true)
+      const newImageUrls = await uploadAllImages(productSlug)
+      allImages = [...allImages, ...newImageUrls]
+      setUploadingImages(false)
     }
+    const imageUrl = allImages.length > 0 ? allImages[0] : null
     
     // Check if SKU already exists
     if (sku) {
@@ -529,6 +580,7 @@ export default function ProductsPage() {
             has_variants: formData.has_variants,
             variant_count: variantCount,
             image_url: imageUrl,
+            images: allImages,
           }
 
           const { data, error } = await supabase
@@ -613,6 +665,7 @@ export default function ProductsPage() {
       has_variants: formData.has_variants,
       variant_count: variantCount,
       image_url: imageUrl,
+      images: allImages,
     }
 
     const { data, error } = await supabase
@@ -702,6 +755,16 @@ export default function ProductsPage() {
 
   async function openEditDialog(product: Product) {
     setSelectedProduct(product)
+    
+    // Fetch full product data including images array
+    const { data: fullProduct } = await supabase
+      .from("products")
+      .select("images")
+      .eq("id", product.id)
+      .single()
+    
+    const images = fullProduct?.images || (product.image_url ? [product.image_url] : [])
+    
     setFormData({
       name: product.name,
       slug: product.slug,
@@ -713,7 +776,8 @@ export default function ProductsPage() {
       status: product.status,
       category_id: product.category_id || "",
       has_variants: product.has_variants || false,
-      image_url: product.image_url || ""
+      image_url: product.image_url || "",
+      images: images
     })
     resetImageState()
     
@@ -790,16 +854,15 @@ export default function ProductsPage() {
     const variantCount = formData.has_variants ? generatedVariants.filter(v => v.enabled).length : 0
     const productSlug = formData.slug || generateSlug(formData.name)
 
-    // Upload new image if selected
-    let imageUrl: string | null = formData.image_url || null
-    if (imageFile) {
-      setUploadingImage(true)
-      const newImageUrl = await uploadImage(imageFile, productSlug)
-      if (newImageUrl) {
-        imageUrl = newImageUrl
-      }
-      setUploadingImage(false)
+    // Upload new images if selected
+    let allImages = [...formData.images]
+    if (imageFiles.length > 0) {
+      setUploadingImages(true)
+      const newImageUrls = await uploadAllImages(productSlug)
+      allImages = [...allImages, ...newImageUrls]
+      setUploadingImages(false)
     }
+    const imageUrl = allImages.length > 0 ? allImages[0] : null
 
     const productData = {
       name: formData.name.trim(),
@@ -814,6 +877,7 @@ export default function ProductsPage() {
       has_variants: formData.has_variants,
       variant_count: variantCount,
       image_url: imageUrl,
+      images: allImages,
     }
 
     const { error } = await supabase
@@ -1243,57 +1307,117 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Image Upload */}
-        <div className="space-y-2">
-          <Label>Product Image</Label>
-          <div className="flex items-start gap-4">
-            {(imagePreview || formData.image_url) ? (
-              <div className="relative">
+        {/* Image Upload - Multiple Images */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Product Images</Label>
+            <span className="text-xs text-muted-foreground">
+              {formData.images.length + imagePreviews.length} / 10 images
+            </span>
+          </div>
+          
+          <div className="flex flex-wrap gap-3">
+            {/* Existing images */}
+            {formData.images.map((img, index) => (
+              <div key={`existing-${index}`} className="relative group">
                 <img 
-                  src={imagePreview || formData.image_url} 
-                  alt="Preview" 
-                  className="h-24 w-24 rounded-lg object-cover border"
+                  src={img} 
+                  alt={`Product ${index + 1}`} 
+                  className={`h-20 w-20 rounded-lg object-cover border-2 ${
+                    index === 0 ? "border-primary" : "border-transparent"
+                  }`}
                 />
-                <Button
-                  variant="destructive"
-                  size="icon-sm"
-                  className="absolute -top-2 -right-2 h-6 w-6"
-                  onClick={removeImage}
-                  type="button"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
+                {index === 0 && (
+                  <span className="absolute -top-1 -left-1 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded">
+                    Main
+                  </span>
+                )}
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-1">
+                  {index !== 0 && (
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      className="h-6 w-6"
+                      onClick={() => setMainImage(img)}
+                      type="button"
+                      title="Set as main image"
+                    >
+                      <Check className="h-3 w-3" />
+                    </Button>
+                  )}
+                  <Button
+                    variant="destructive"
+                    size="icon-sm"
+                    className="h-6 w-6"
+                    onClick={() => removeExistingImage(index)}
+                    type="button"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
-            ) : (
+            ))}
+            
+            {/* New image previews (not yet uploaded) */}
+            {imagePreviews.map((preview, index) => (
+              <div key={`new-${index}`} className="relative group">
+                <img 
+                  src={preview} 
+                  alt={`New ${index + 1}`} 
+                  className="h-20 w-20 rounded-lg object-cover border-2 border-dashed border-primary/50"
+                />
+                <span className="absolute -top-1 -left-1 bg-yellow-500 text-white text-[10px] px-1.5 py-0.5 rounded">
+                  New
+                </span>
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                  <Button
+                    variant="destructive"
+                    size="icon-sm"
+                    className="h-6 w-6"
+                    onClick={() => removeNewImage(index)}
+                    type="button"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            
+            {/* Add more button */}
+            {formData.images.length + imagePreviews.length < 10 && (
               <div 
-                className="h-24 w-24 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
+                className="h-20 w-20 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground mt-1">Upload</span>
+                <Plus className="h-6 w-6 text-muted-foreground" />
+                <span className="text-[10px] text-muted-foreground mt-1">Add</span>
               </div>
             )}
-            <div className="flex-1">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageSelect}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload />
-                {(imagePreview || formData.image_url) ? "Change Image" : "Upload Image"}
-              </Button>
-              <p className="text-xs text-muted-foreground mt-2">
-                Recommended: 800x800px. Max 5MB. JPG, PNG, or WebP.
-              </p>
-            </div>
+          </div>
+          
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleImageSelect}
+          />
+          
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={formData.images.length + imagePreviews.length >= 10}
+            >
+              <Upload />
+              Add Images
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Max 5MB per image. First image is the main product image.
+            </p>
           </div>
         </div>
 
