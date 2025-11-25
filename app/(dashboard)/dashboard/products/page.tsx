@@ -132,6 +132,7 @@ export default function ProductsPage() {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [uploadingImages, setUploadingImages] = useState(false)
+  const [imagesToDelete, setImagesToDelete] = useState<string[]>([]) // Track removed images for deletion
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   // Variant options
@@ -285,7 +286,7 @@ export default function ProductsPage() {
       }
 
       // Limit total images to 10
-      if (imageFiles.length + formData.images.length + newFiles.length >= 10) {
+      if (imageFiles.length + (formData.images?.length || 0) + newFiles.length >= 10) {
         alert("Maximum 10 images allowed per product")
         return
       }
@@ -311,11 +312,16 @@ export default function ProductsPage() {
     }
   }
 
-  async function uploadImage(file: File, productSlug: string, index: number): Promise<string | null> {
+  async function uploadImage(file: File, sku: string, index: number): Promise<string | null> {
     if (!store) return null
 
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${store.id}/products/${productSlug}-${Date.now()}-${index}.${fileExt}`
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    // Path: products/{store_id}/{sku}/{index}-{timestamp}.{ext}
+    // Each product has its own folder based on SKU
+    const safeSku = sku.replace(/[^a-zA-Z0-9-_]/g, '_') // Make SKU safe for folder name
+    const fileName = `products/${store.id}/${safeSku}/${index}-${Date.now()}.${fileExt}`
+
+    console.log("Uploading to:", fileName)
 
     const { data, error } = await supabase.storage
       .from('Sellium')
@@ -325,23 +331,28 @@ export default function ProductsPage() {
       })
 
     if (error) {
-      console.error("Error uploading image:", error)
+      console.error("Error uploading image:", error.message, error)
+      setFormError(`Failed to upload image: ${error.message}`)
       return null
     }
+
+    console.log("Upload successful:", data)
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('Sellium')
       .getPublicUrl(fileName)
 
+    console.log("Public URL:", publicUrl)
+
     return publicUrl
   }
 
-  async function uploadAllImages(productSlug: string): Promise<string[]> {
+  async function uploadAllImages(sku: string): Promise<string[]> {
     const uploadedUrls: string[] = []
     
     for (let i = 0; i < imageFiles.length; i++) {
-      const url = await uploadImage(imageFiles[i], productSlug, i)
+      const url = await uploadImage(imageFiles[i], sku, i)
       if (url) {
         uploadedUrls.push(url)
       }
@@ -356,7 +367,14 @@ export default function ProductsPage() {
   }
 
   function removeExistingImage(index: number) {
-    const newImages = formData.images.filter((_, i) => i !== index)
+    const imageToRemove = (formData.images || [])[index]
+    const newImages = (formData.images || []).filter((_, i) => i !== index)
+    
+    // Track this image for deletion when saving
+    if (imageToRemove) {
+      setImagesToDelete([...imagesToDelete, imageToRemove])
+    }
+    
     setFormData({ 
       ...formData, 
       images: newImages,
@@ -366,7 +384,7 @@ export default function ProductsPage() {
 
   function setMainImage(imageUrl: string) {
     // Move this image to be the first (main) image
-    const otherImages = formData.images.filter(img => img !== imageUrl)
+    const otherImages = (formData.images || []).filter(img => img !== imageUrl)
     setFormData({
       ...formData,
       images: [imageUrl, ...otherImages],
@@ -377,8 +395,72 @@ export default function ProductsPage() {
   function resetImageState() {
     setImageFiles([])
     setImagePreviews([])
+    setImagesToDelete([])
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
+    }
+  }
+
+  async function deleteImagesFromStorage(imageUrls: string[]) {
+    if (imageUrls.length === 0) return
+
+    const filePaths: string[] = []
+    
+    for (const url of imageUrls) {
+      try {
+        // Extract the file path from the URL
+        // URL format: https://xxx.supabase.co/storage/v1/object/public/Sellium/products/...
+        const urlParts = url.split('/Sellium/')
+        if (urlParts[1]) {
+          const filePath = urlParts[1].split('?')[0] // Remove query params
+          filePaths.push(filePath)
+        }
+      } catch (e) {
+        console.log("Could not parse image URL:", url)
+      }
+    }
+
+    if (filePaths.length > 0) {
+      console.log("Deleting images from storage:", filePaths)
+      const { error } = await supabase.storage.from('Sellium').remove(filePaths)
+      if (error) {
+        console.error("Error deleting images:", error)
+      } else {
+        console.log("Successfully deleted images")
+      }
+    }
+  }
+
+  async function deleteProductFolder(sku: string) {
+    if (!store || !sku) return
+
+    // List all files in the product folder
+    const safeSku = sku.replace(/[^a-zA-Z0-9-_]/g, '_')
+    const folderPath = `products/${store.id}/${safeSku}`
+    console.log("Deleting product folder:", folderPath)
+
+    const { data: files, error: listError } = await supabase.storage
+      .from('Sellium')
+      .list(folderPath)
+
+    if (listError) {
+      console.error("Error listing folder:", listError)
+      return
+    }
+
+    if (files && files.length > 0) {
+      const filePaths = files.map(file => `${folderPath}/${file.name}`)
+      console.log("Deleting files:", filePaths)
+      
+      const { error: deleteError } = await supabase.storage
+        .from('Sellium')
+        .remove(filePaths)
+
+      if (deleteError) {
+        console.error("Error deleting folder contents:", deleteError)
+      } else {
+        console.log("Successfully deleted product folder contents")
+      }
     }
   }
 
@@ -544,11 +626,14 @@ export default function ProductsPage() {
     const sku = formData.sku.trim() || null
     const productSlug = formData.slug || generateSlug(formData.name)
     
+    // Generate a folder name - use SKU if available, otherwise use slug
+    const folderName = sku || productSlug
+    
     // Upload new images if selected
-    let allImages = [...formData.images]
+    let allImages = [...(formData.images || [])]
     if (imageFiles.length > 0) {
       setUploadingImages(true)
-      const newImageUrls = await uploadAllImages(productSlug)
+      const newImageUrls = await uploadAllImages(folderName)
       allImages = [...allImages, ...newImageUrls]
       setUploadingImages(false)
     }
@@ -724,6 +809,11 @@ export default function ProductsPage() {
     const totalStock = formData.has_variants 
       ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (v.stock || 0), 0)
       : parseInt(formData.stock) || 0
+
+    // Delete any removed images from storage
+    if (imagesToDelete.length > 0) {
+      await deleteImagesFromStorage(imagesToDelete)
+    }
     
     setProducts([{ ...data, has_variants: formData.has_variants, variant_count: variantCount, stock: totalStock }, ...products])
     setIsAddDialogOpen(false)
@@ -736,6 +826,9 @@ export default function ProductsPage() {
 
     setSaving(true)
 
+    // Get SKU for folder deletion (fallback to slug if no SKU)
+    const folderName = selectedProduct.sku || selectedProduct.slug
+
     const { error } = await supabase
       .from("products")
       .delete()
@@ -745,6 +838,11 @@ export default function ProductsPage() {
       console.error("Error deleting product:", error)
       setSaving(false)
       return
+    }
+
+    // Delete entire product folder from storage (all images at once)
+    if (folderName) {
+      await deleteProductFolder(folderName)
     }
 
     setProducts(products.filter(p => p.id !== selectedProduct.id))
@@ -853,12 +951,16 @@ export default function ProductsPage() {
 
     const variantCount = formData.has_variants ? generatedVariants.filter(v => v.enabled).length : 0
     const productSlug = formData.slug || generateSlug(formData.name)
+    const sku = formData.sku.trim() || null
+    
+    // Generate a folder name - use SKU if available, otherwise use slug
+    const folderName = sku || productSlug
 
     // Upload new images if selected
-    let allImages = [...formData.images]
+    let allImages = [...(formData.images || [])]
     if (imageFiles.length > 0) {
       setUploadingImages(true)
-      const newImageUrls = await uploadAllImages(productSlug)
+      const newImageUrls = await uploadAllImages(folderName)
       allImages = [...allImages, ...newImageUrls]
       setUploadingImages(false)
     }
@@ -947,6 +1049,11 @@ export default function ProductsPage() {
     const totalStock = formData.has_variants 
       ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (v.stock || 0), 0)
       : parseInt(formData.stock) || 0
+
+    // Delete any removed images from storage
+    if (imagesToDelete.length > 0) {
+      await deleteImagesFromStorage(imagesToDelete)
+    }
     
     setProducts(products.map(p =>
       p.id === selectedProduct.id
@@ -1286,7 +1393,9 @@ export default function ProductsPage() {
                       stock: data.stock.toString(),
                       status: data.status,
                       category_id: data.category_id || "",
-                      has_variants: false
+                      has_variants: data.has_variants || false,
+                      image_url: data.image_url || "",
+                      images: data.images || []
                     })
                     if (isEdit) {
                       setSelectedProduct(data)
@@ -1312,13 +1421,13 @@ export default function ProductsPage() {
           <div className="flex items-center justify-between">
             <Label>Product Images</Label>
             <span className="text-xs text-muted-foreground">
-              {formData.images.length + imagePreviews.length} / 10 images
+              {(formData.images?.length || 0) + imagePreviews.length} / 10 images
             </span>
           </div>
           
           <div className="flex flex-wrap gap-3">
             {/* Existing images */}
-            {formData.images.map((img, index) => (
+            {(formData.images || []).map((img, index) => (
               <div key={`existing-${index}`} className="relative group">
                 <img 
                   src={img} 
@@ -1384,7 +1493,7 @@ export default function ProductsPage() {
             ))}
             
             {/* Add more button */}
-            {formData.images.length + imagePreviews.length < 10 && (
+            {(formData.images?.length || 0) + imagePreviews.length < 10 && (
               <div 
                 className="h-20 w-20 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
                 onClick={() => fileInputRef.current?.click()}
@@ -1410,7 +1519,7 @@ export default function ProductsPage() {
               size="sm"
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={formData.images.length + imagePreviews.length >= 10}
+              disabled={(formData.images?.length || 0) + imagePreviews.length >= 10}
             >
               <Upload />
               Add Images

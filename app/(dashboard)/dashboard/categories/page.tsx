@@ -170,30 +170,57 @@ export default function CategoriesPage() {
     reader.readAsDataURL(file)
   }
 
-  async function uploadImage(file: File, categorySlug: string): Promise<string | null> {
+  async function uploadImage(file: File, categorySlug: string, oldImageUrl?: string): Promise<string | null> {
     if (!store) return null
 
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${store.id}/categories/${categorySlug}-${Date.now()}.${fileExt}`
+    // Delete old image first if it exists (handles different extensions)
+    if (oldImageUrl) {
+      try {
+        // Extract the file path from the URL
+        const urlParts = oldImageUrl.split('/Sellium/')
+        if (urlParts[1]) {
+          const oldFilePath = urlParts[1].split('?')[0] // Remove query params
+          console.log("Deleting old image:", oldFilePath)
+          await supabase.storage.from('Sellium').remove([oldFilePath])
+        }
+      } catch (e) {
+        console.log("Could not delete old image, continuing with upload")
+      }
+    }
+
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    // Fixed filename per category - always replaces old image
+    // Path: categories/{store_id}/{slug}.{ext}
+    const fileName = `categories/${store.id}/${categorySlug}.${fileExt}`
+
+    console.log("Uploading to:", fileName)
 
     const { data, error } = await supabase.storage
       .from('Sellium')
       .upload(fileName, file, {
         cacheControl: '3600',
-        upsert: true
+        upsert: true  // This replaces existing file with same name
       })
 
     if (error) {
-      console.error("Error uploading image:", error)
+      console.error("Error uploading image:", error.message, error)
+      alert(`Failed to upload image: ${error.message}`)
       return null
     }
 
-    // Get public URL
+    console.log("Upload successful:", data)
+
+    // Get public URL with cache-busting query param to show new image immediately
     const { data: { publicUrl } } = supabase.storage
       .from('Sellium')
       .getPublicUrl(fileName)
 
-    return publicUrl
+    // Add timestamp to bust browser cache when image is replaced
+    const urlWithCacheBust = `${publicUrl}?t=${Date.now()}`
+
+    console.log("Public URL:", urlWithCacheBust)
+
+    return urlWithCacheBust
   }
 
   function removeImage() {
@@ -224,7 +251,7 @@ export default function CategoriesPage() {
     let imageUrl: string | null = null
     if (imageFile) {
       setUploadingImage(true)
-      imageUrl = await uploadImage(imageFile, slug)
+      imageUrl = await uploadImage(imageFile, slug) // No old image for new category
       setUploadingImage(false)
     }
 
@@ -262,11 +289,12 @@ export default function CategoriesPage() {
 
     const slug = formData.slug || generateSlug(formData.name)
 
-    // Upload new image if selected
+    // Upload new image if selected (delete old one first)
     let imageUrl: string | null = formData.image_url || null
     if (imageFile) {
       setUploadingImage(true)
-      const newImageUrl = await uploadImage(imageFile, slug)
+      // Pass old image URL so it gets deleted before uploading new one
+      const newImageUrl = await uploadImage(imageFile, slug, selectedCategory?.image_url || undefined)
       if (newImageUrl) {
         imageUrl = newImageUrl
       }
