@@ -24,8 +24,8 @@ export default function SupportPage() {
           <h1 className="text-xl font-normal">Support</h1>
           <p className="text-sm font-normal text-muted-foreground">Get help and contact our support team</p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
+        <Button size="sm">
+          <Plus />
           New Ticket
         </Button>
       </div>
@@ -38,7 +38,7 @@ export default function SupportPage() {
           </div>
           <h3 className="font-semibold">Live Chat</h3>
           <p className="mt-1 text-sm text-muted-foreground">Chat with our support team</p>
-          <Button variant="outline" className="mt-4 w-full">
+          <Button variant="outline" size="sm" className="mt-4 w-full">
             Start Chat
           </Button>
         </div>
@@ -49,7 +49,7 @@ export default function SupportPage() {
           </div>
           <h3 className="font-semibold">Email Support</h3>
           <p className="mt-1 text-sm text-muted-foreground">support@sellium.com</p>
-          <Button variant="outline" className="mt-4 w-full">
+          <Button variant="outline" size="sm" className="mt-4 w-full">
             Send Email
           </Button>
         </div>
@@ -60,7 +60,7 @@ export default function SupportPage() {
           </div>
           <h3 className="font-semibold">Documentation</h3>
           <p className="mt-1 text-sm text-muted-foreground">Browse our help articles</p>
-          <Button variant="outline" className="mt-4 w-full">
+          <Button variant="outline" size="sm" className="mt-4 w-full">
             View Docs
           </Button>
         </div>

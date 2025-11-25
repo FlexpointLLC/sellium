@@ -1,32 +1,45 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
-// Routes that don't require authentication
-const publicRoutes = ['/', '/login', '/verify', '/auth/callback']
+// Routes that don't require authentication (for admin subdomain)
+const publicRoutes = ['/', '/login', '/verify', '/auth/callback', '/onboarding']
 
 export async function middleware(request: NextRequest) {
-  const { response, user } = await updateSession(request)
-  
+  const hostname = request.headers.get('host') || ''
   const pathname = request.nextUrl.pathname
+  
+  // Check if we're on the admin subdomain (admin.sellium.store or localhost for dev)
+  const isAdminSubdomain = hostname.startsWith('admin.') || 
+                           hostname.startsWith('localhost') || 
+                           hostname.startsWith('127.0.0.1')
+  
+  // If on admin subdomain, handle dashboard authentication
+  if (isAdminSubdomain) {
+    const { response, user } = await updateSession(request)
+    
+    // Check if the route is public
+    const isPublicRoute = publicRoutes.some(route => 
+      pathname === route || pathname.startsWith('/auth/')
+    )
 
-  // Check if the route is public
-  const isPublicRoute = publicRoutes.some(route => 
-    pathname === route || pathname.startsWith('/auth/')
-  )
+    // If user is not authenticated and trying to access protected route
+    if (!user && !isPublicRoute && pathname.startsWith('/dashboard')) {
+      const redirectUrl = new URL('/login', request.url)
+      redirectUrl.searchParams.set('redirectTo', pathname)
+      return NextResponse.redirect(redirectUrl)
+    }
 
-  // If user is not authenticated and trying to access protected route
-  if (!user && !isPublicRoute) {
-    const redirectUrl = new URL('/login', request.url)
-    redirectUrl.searchParams.set('redirectTo', pathname)
-    return NextResponse.redirect(redirectUrl)
+    // If user is authenticated and trying to access login/verify pages
+    if (user && (pathname === '/login' || pathname === '/verify')) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+
+    return response
   }
-
-  // If user is authenticated and trying to access login/verify pages
-  if (user && (pathname === '/login' || pathname === '/verify')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
-
-  return response
+  
+  // For main domain (sellium.store), serve storefront routes
+  // The /[username] route will handle the storefront
+  return NextResponse.next()
 }
 
 export const config = {
@@ -41,4 +54,3 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
-
