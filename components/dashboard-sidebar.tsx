@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   House,
   Package,
@@ -29,6 +29,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { Logo } from "@/components/logo"
+import { createClient } from "@/lib/supabase/client"
 
 const menuGroups = [
   {
@@ -105,6 +106,14 @@ const menuGroups = [
 
 export function DashboardSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const supabase = createClient()
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    router.push("/login")
+    router.refresh()
+  }
 
   return (
     <Sidebar collapsible="icon">
@@ -142,7 +151,7 @@ export function DashboardSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Sign Out">
-              <button className="w-full">
+              <button className="w-full" onClick={handleSignOut}>
                 <SignOut className="h-4 w-4" />
                 <span>Sign Out</span>
               </button>
