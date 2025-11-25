@@ -19,7 +19,7 @@ interface Transaction {
   created_at: string
   order?: {
     order_number: string
-  } | null
+  }[] | null
 }
 
 interface EarningsData {
@@ -65,6 +65,7 @@ export default function EarningsPage() {
 
   useEffect(() => {
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function fetchData() {
@@ -303,7 +304,7 @@ export default function EarningsPage() {
                   </span>
                 </div>
                 <div className="flex items-center font-medium">
-                  {transaction.order?.order_number || transaction.description || "-"}
+                  {transaction.order?.[0]?.order_number || transaction.description || "-"}
                 </div>
                 <div className="flex items-center">
                   {transaction.type === "refund" ? "-" : ""}

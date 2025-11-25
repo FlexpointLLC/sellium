@@ -204,7 +204,7 @@ export default function OnboardingPage() {
           <div className="space-y-1">
             <h1 className="text-3xl font-semibold tracking-tight">Welcome to Sellium</h1>
             <p className="text-3xl text-muted-foreground tracking-tight">
-              Let's set up your store.
+              Let&apos;s set up your store.
             </p>
           </div>
 

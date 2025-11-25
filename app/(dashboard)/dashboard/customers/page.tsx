@@ -93,6 +93,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function fetchData() {
@@ -703,7 +704,7 @@ export default function CustomersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Customer</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{selectedCustomer ? getDisplayName(selectedCustomer) : ""}"? 
+              Are you sure you want to delete &quot;{selectedCustomer ? getDisplayName(selectedCustomer) : ""}&quot;? 
               This action cannot be undone. All associated data including order history will be affected.
             </AlertDialogDescription>
           </AlertDialogHeader>

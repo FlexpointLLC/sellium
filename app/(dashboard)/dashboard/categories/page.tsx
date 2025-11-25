@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
@@ -80,6 +81,7 @@ export default function CategoriesPage() {
 
   useEffect(() => {
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function fetchData() {
