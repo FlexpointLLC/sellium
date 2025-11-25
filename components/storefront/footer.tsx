@@ -16,7 +16,7 @@ interface Store {
   name: string
   username: string
   logo_url: string | null
-  theme_color: string
+  theme_color: string | null
   social_links?: {
     phone?: string
     whatsapp?: string

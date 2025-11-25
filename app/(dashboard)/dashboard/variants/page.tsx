@@ -62,11 +62,11 @@ export default function VariantsPage() {
   })
 
   useEffect(() => {
-    fetchData()
+    fetchVariants()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function fetchData() {
+  async function fetchVariants() {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
