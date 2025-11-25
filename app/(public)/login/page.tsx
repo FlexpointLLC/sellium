@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { createClient } from "@/lib/supabase/client"
 
 function LoginForm() {
   const router = useRouter()
@@ -12,19 +13,27 @@ function LoginForm() {
   const [email, setEmail] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const supabase = createClient()
 
-  // Get redirect URL from query params, default to home
-  const redirectTo = searchParams.get("redirectTo") || "/"
+  // Get redirect URL from query params, default to dashboard
+  const redirectTo = searchParams.get("redirectTo") || "/dashboard"
 
   const handleGoogleLogin = async () => {
     setError(null)
     setLoading(true)
 
     try {
-      // TODO: Implement Google OAuth
-      console.log("Google login")
-      setError("Google login not implemented yet")
-      setLoading(false)
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`,
+        },
+      })
+
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+      }
     } catch (err) {
       setError("An unexpected error occurred")
       setLoading(false)
@@ -37,10 +46,22 @@ function LoginForm() {
     setLoading(true)
 
     try {
-      // TODO: Implement email magic link
-      console.log("Email login:", email)
-      setError("Email login not implemented yet")
-      setLoading(false)
+      // Send OTP to email using Supabase
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true,
+        },
+      })
+
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+        return
+      }
+      
+      // Navigate to verify page with email
+      router.push(`/verify?email=${encodeURIComponent(email)}`)
     } catch (err) {
       setError("An unexpected error occurred")
       setLoading(false)
