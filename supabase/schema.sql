@@ -39,6 +39,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'social_links') THEN
     ALTER TABLE public.stores ADD COLUMN social_links JSONB;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'banner_images') THEN
+    ALTER TABLE public.stores ADD COLUMN banner_images TEXT[] DEFAULT '{}';
+  END IF;
 END $$;
 
 -- Add missing columns to categories
@@ -247,6 +250,7 @@ CREATE TABLE IF NOT EXISTS public.stores (
   business_type TEXT NOT NULL,
   logo_url TEXT,
   banner_url TEXT,
+  banner_images TEXT[] DEFAULT '{}',
   theme_color TEXT DEFAULT '#22c55e',
   currency TEXT DEFAULT 'USD',
   timezone TEXT DEFAULT 'UTC',

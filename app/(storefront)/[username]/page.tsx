@@ -1,28 +1,24 @@
 "use client"
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import Image from "next/image"
 import { 
-  MagnifyingGlass, 
-  Phone, 
-  InstagramLogo, 
-  FacebookLogo, 
-  WhatsappLogo,
   ShoppingBag,
+  ShoppingCart,
   CaretLeft,
   CaretRight,
-  Eye,
-  MapPin,
-  Clock,
-  Envelope,
-  User
+  Check,
+  X
 } from "phosphor-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { CartProvider, useCart } from "@/lib/cart-context"
+import { toast } from "sonner"
+import { StorefrontHeader } from "@/components/storefront/header"
+import { StorefrontFooter } from "@/components/storefront/footer"
+import { FloatingButtons } from "@/components/storefront/floating-buttons"
+import { QuickViewModal } from "@/components/storefront/quick-view-modal"
 
 interface Store {
   id: string
@@ -31,7 +27,9 @@ interface Store {
   description: string | null
   logo_url: string | null
   banner_url: string | null
+  banner_images: string[] | null  // Multiple banner images for slider
   theme_color: string | null
+  currency: string  // Currency code (BDT, USD, EUR, etc.)
   social_links: {
     phone?: string
     whatsapp?: string
@@ -46,6 +44,20 @@ interface Store {
     country?: string
     postal_code?: string
   } | null
+}
+
+// Currency symbols mapping
+const currencySymbols: Record<string, string> = {
+  BDT: "৳",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  INR: "₹"
+}
+
+function formatPrice(price: number, currency: string): string {
+  const symbol = currencySymbols[currency] || currency
+  return `${symbol} ${price.toFixed(2)}`
 }
 
 interface Category {
@@ -63,9 +75,13 @@ interface Product {
   price: number
   compare_at_price: number | null
   image_url: string | null
+  images: string[] | null  // Multiple product images
   description: string | null
   category_id: string | null
   category?: Category | null
+  stock: number | null  // Stock quantity
+  daily_sales?: number  // Number of sales today
+  is_hot?: boolean  // Hot badge if daily_sales > 10
 }
 
 interface BannerSlide {
@@ -77,15 +93,32 @@ interface BannerSlide {
 }
 
 export default function StorefrontPage({ params }: { params: { username: string } }) {
+  return (
+    <CartProvider storeUsername={params.username}>
+      <StorefrontContent params={params} />
+    </CartProvider>
+  )
+}
+
+function StorefrontContent({ params }: { params: { username: string } }) {
   const [store, setStore] = useState<Store | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<Product[]>([])
-  const [productsByCategory, setProductsByCategory] = useState<Record<string, Product[]>>({})
+  const [productsByCategory, setProductsByCategory] = useState<Record<string, { name: string; slug: string; products: Product[] }>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [currentSlide, setCurrentSlide] = useState(0)
-  const [cartCount, setCartCount] = useState(0)
+  const { itemCount } = useCart()
+  
+  // Quick View Modal state
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false)
+  
+  const handleQuickView = (product: Product) => {
+    setQuickViewProduct(product)
+    setIsQuickViewOpen(true)
+  }
 
   // Demo banner slides (will be replaced with dynamic data later)
   const bannerSlides: BannerSlide[] = [
@@ -129,7 +162,9 @@ export default function StorefrontPage({ params }: { params: { username: string 
         description: storeData.description || null,
         logo_url: storeData.logo_url || null,
         banner_url: storeData.banner_url || null,
+        banner_images: storeData.banner_images || null,
         theme_color: storeData.theme_color || "#000000",
+        currency: storeData.currency || "BDT",
         social_links: storeData.social_links || null,
         address: storeData.address || null
       })
@@ -183,21 +218,29 @@ export default function StorefrontPage({ params }: { params: { username: string 
           price: p.price,
           compare_at_price: p.compare_at_price,
           image_url: p.image_url || null,
+          images: p.images || null,  // Include multiple images
           description: p.description || null,
           category_id: p.category_id,
-          category: p.category
+          category: p.category,
+          stock: p.stock !== undefined && p.stock !== null ? p.stock : 0,  // Stock quantity
+          daily_sales: p.daily_sales || 0,
+          is_hot: (p.daily_sales || 0) > 10  // Hot if more than 10 sales today
         }))
         setProducts(formattedProducts)
 
         // Group products by category
-        const grouped: Record<string, Product[]> = {}
+        const grouped: Record<string, { name: string; slug: string; products: Product[] }> = {}
         formattedProducts.forEach((product: Product) => {
           if (product.category) {
-            const catName = product.category.name
-            if (!grouped[catName]) {
-              grouped[catName] = []
+            const catSlug = product.category.slug
+            if (!grouped[catSlug]) {
+              grouped[catSlug] = {
+                name: product.category.name,
+                slug: product.category.slug,
+                products: []
+              }
             }
-            grouped[catName].push(product)
+            grouped[catSlug].products.push(product)
           }
         })
         setProductsByCategory(grouped)
@@ -209,14 +252,22 @@ export default function StorefrontPage({ params }: { params: { username: string 
     fetchStore()
   }, [params.username])
 
-  // Auto-slide for banner
+  // Auto-slide for banner - only if multiple images
   useEffect(() => {
-    if (bannerSlides.length <= 1) return
+    const bannerImages = store?.banner_images?.length 
+      ? store.banner_images 
+      : store?.banner_url 
+        ? [store.banner_url] 
+        : []
+    
+    if (bannerImages.length <= 1) return
+    
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % bannerSlides.length)
-    }, 5000)
+      setCurrentSlide((prev) => (prev + 1) % bannerImages.length)
+    }, 4000) // Change slide every 4 seconds
+    
     return () => clearInterval(timer)
-  }, [bannerSlides.length])
+  }, [store?.banner_images, store?.banner_url])
 
   function nextSlide() {
     setCurrentSlide((prev) => (prev + 1) % bannerSlides.length)
@@ -246,151 +297,98 @@ export default function StorefrontPage({ params }: { params: { username: string 
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
-      {/* Top Header - Search | Logo | Icons */}
-      <header className="sticky top-0 z-50 bg-white border-b border-black/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 gap-4">
-            {/* Search */}
-            <div className="relative flex-1 max-w-xs">
-              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="Search products..."
-                className="pl-9 h-9 bg-gray-50 border-gray-200"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-
-            {/* Logo */}
-            <Link href={`/${params.username}`} className="flex items-center gap-2">
-              {store.logo_url ? (
-                <img src={store.logo_url} alt={store.name} className="h-10 w-auto" />
-              ) : (
-                <div className="flex items-center gap-2">
-                  <div 
-                    className="h-8 w-8 rounded flex items-center justify-center text-white font-bold"
-                    style={{ backgroundColor: themeColor }}
-                  >
-                    {store.name.charAt(0)}
-                  </div>
-                  <span className="font-bold text-xl tracking-tight">{store.name}</span>
-                </div>
-              )}
-            </Link>
-
-            {/* Icons */}
-            <div className="flex items-center gap-2">
-              {store.social_links?.phone && (
-                <a 
-                  href={`tel:${store.social_links.phone}`} 
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                  title="Call us"
-                >
-                  <Phone className="h-5 w-5" />
-                </a>
-              )}
-              {store.social_links?.instagram && (
-                <a 
-                  href={store.social_links.instagram} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                  title="Instagram"
-                >
-                  <InstagramLogo className="h-5 w-5" />
-                </a>
-              )}
-              {store.social_links?.facebook && (
-                <a 
-                  href={store.social_links.facebook} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                  title="Facebook"
-                >
-                  <FacebookLogo className="h-5 w-5" />
-                </a>
-              )}
-              <a 
-                href="#" 
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                title="Account"
-              >
-                <User className="h-5 w-5" />
-              </a>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Categories Navigation */}
-      {categories.length > 0 && (
-        <nav className="bg-white border-b border-black/10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-center gap-8 h-12 overflow-x-auto">
-              {categories.map((category) => (
-                <Link
-                  key={category.id}
-                  href={`/${params.username}/category/${category.slug}`}
-                  className="text-sm font-medium text-gray-600 hover:text-gray-900 whitespace-nowrap transition-colors"
-                >
-                  {category.name.toUpperCase()}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </nav>
-      )}
+      {/* Header & Categories Navigation */}
+      <StorefrontHeader 
+        store={store}
+        categories={categories}
+        username={params.username}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
 
       {/* Image Slider / Banner */}
-      <section className="relative bg-gray-100">
-        <div className="relative h-[300px] sm:h-[400px] md:h-[450px] overflow-hidden">
-          {/* If store has a banner, show it. Otherwise show a placeholder */}
-          {store.banner_url ? (
-            <img 
-              src={store.banner_url} 
-              alt={store.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div 
-              className="w-full h-full flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${themeColor}20 0%, ${themeColor}40 100%)` }}
-            >
-              <div className="text-center px-4">
-                <h1 className="text-4xl md:text-5xl font-bold mb-4">{store.name}</h1>
-                {store.description && (
-                  <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-6">
-                    {store.description}
-                  </p>
-                )}
-                <Link
-                  href={`/${params.username}/products`}
-                  className="inline-flex items-center gap-2 px-6 py-3 text-white font-medium rounded-md transition-colors"
-                  style={{ backgroundColor: themeColor }}
-                >
-                  Shop Now
-                  <CaretRight className="h-4 w-4" />
-                </Link>
-              </div>
+      {(() => {
+        // Get all banner images - combine banner_images array with banner_url fallback
+        const bannerImages = store.banner_images?.length 
+          ? store.banner_images 
+          : store.banner_url 
+            ? [store.banner_url] 
+            : []
+        
+        const hasMultipleImages = bannerImages.length > 1
+        
+        return (
+          <section className="relative bg-gray-100">
+            <div className="relative h-[300px] sm:h-[400px] md:h-[450px] overflow-hidden">
+              {bannerImages.length > 0 ? (
+                <>
+                  {/* Banner Images - Slide Animation */}
+                  <div 
+                    className="flex h-full transition-transform duration-700 ease-in-out"
+                    style={{ 
+                      width: `${bannerImages.length * 100}%`,
+                      transform: `translateX(-${currentSlide * (100 / bannerImages.length)}%)`
+                    }}
+                  >
+                    {bannerImages.map((imageUrl, index) => (
+                      <div 
+                        key={index}
+                        className="relative h-full flex-shrink-0"
+                        style={{ width: `${100 / bannerImages.length}%` }}
+                      >
+                        <img 
+                          src={imageUrl} 
+                          alt={`${store.name} banner ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Slider Navigation Arrows - Only show if multiple images */}
+                  {hasMultipleImages && (
+                    <>
+                      <button
+                        onClick={() => setCurrentSlide(prev => prev === 0 ? bannerImages.length - 1 : prev - 1)}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white rounded-full transition-colors z-10"
+                      >
+                        <CaretLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => setCurrentSlide(prev => prev === bannerImages.length - 1 ? 0 : prev + 1)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white rounded-full transition-colors z-10"
+                      >
+                        <CaretRight className="h-5 w-5" />
+                      </button>
+                    </>
+                  )}
+                  
+                  {/* Slider Navigation Dots - Only show if multiple images */}
+                  {hasMultipleImages && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+                      {bannerImages.map((_, index) => (
+                        <button
+                          key={index}
+                          className={`w-2 h-2 rounded-full transition-colors ${
+                            currentSlide === index ? "bg-gray-800" : "bg-gray-400"
+                          }`}
+                          onClick={() => setCurrentSlide(index)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Placeholder when no banner images - just a clean gradient
+                <div 
+                  className="w-full h-full"
+                  style={{ background: `linear-gradient(135deg, ${themeColor}15 0%, ${themeColor}30 100%)` }}
+                />
+              )}
             </div>
-          )}
-
-          {/* Slider Navigation Dots */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-            {[0, 1, 2].map((dot) => (
-              <button
-                key={dot}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  currentSlide === dot ? "bg-gray-800" : "bg-gray-400"
-                }`}
-                onClick={() => setCurrentSlide(dot)}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
+          </section>
+        )
+      })()}
 
       {/* Browse Categories */}
       {categories.length > 0 && (
@@ -438,17 +436,15 @@ export default function StorefrontPage({ params }: { params: { username: string 
       )}
 
       {/* Products by Category */}
-      {Object.entries(productsByCategory).map(([categoryName, categoryProducts]) => (
-        <section key={categoryName} className="py-8 px-4">
+      {Object.entries(productsByCategory).map(([categorySlug, categoryData]) => (
+        <section key={categorySlug} className="py-8 px-4">
           <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-4">
-                <h2 className="text-lg font-bold tracking-wide">{categoryName.toUpperCase()}</h2>
-                <div className="flex-1 h-px bg-black/10 hidden sm:block" style={{ width: '200px' }} />
-              </div>
+            <div className="flex items-center gap-4 mb-6">
+              <h2 className="text-lg font-bold tracking-wide shrink-0">{categoryData.name.toUpperCase()}</h2>
+              <div className="flex-1 h-px bg-black/10" />
               <Link 
-                href={`/${params.username}/products?category=${categoryName}`}
-                className="text-sm font-medium hover:underline"
+                href={`/${params.username}/category/${categoryData.slug}`}
+                className="text-sm font-medium hover:underline shrink-0"
                 style={{ color: themeColor }}
               >
                 SEE ALL
@@ -456,31 +452,13 @@ export default function StorefrontPage({ params }: { params: { username: string 
             </div>
 
             {/* Product Carousel */}
-            <div className="relative">
-              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-                {categoryProducts.slice(0, 8).map((product) => (
-                  <div key={product.id} className="flex-shrink-0 w-[220px]">
-                    <ProductCard 
-                      product={product} 
-                      username={params.username}
-                      themeColor={themeColor}
-                    />
-                  </div>
-                ))}
-              </div>
-              
-              {/* Carousel Navigation */}
-              {categoryProducts.length > 4 && (
-                <>
-                  <button className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 w-10 h-10 bg-white shadow-lg rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors hidden md:flex">
-                    <CaretLeft className="h-5 w-5" />
-                  </button>
-                  <button className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 w-10 h-10 bg-white shadow-lg rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors hidden md:flex">
-                    <CaretRight className="h-5 w-5" />
-                  </button>
-                </>
-              )}
-            </div>
+            <ProductCarousel 
+              products={categoryData.products.slice(0, 12)} 
+              username={params.username}
+              themeColor={themeColor}
+              currency={store?.currency || "BDT"}
+              onQuickView={handleQuickView}
+            />
           </div>
         </section>
       ))}
@@ -500,6 +478,8 @@ export default function StorefrontPage({ params }: { params: { username: string 
                   product={product} 
                   username={params.username}
                   themeColor={themeColor}
+                  currency={store?.currency || "BDT"}
+                  onQuickView={handleQuickView}
                 />
               ))}
             </div>
@@ -519,155 +499,133 @@ export default function StorefrontPage({ params }: { params: { username: string 
       )}
 
       {/* Footer */}
-      <footer className="bg-white border-t border-black/10 mt-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            {/* Store Info */}
-            <div className="md:col-span-1">
-              {store.logo_url ? (
-                <img src={store.logo_url} alt={store.name} className="h-10 w-auto mb-4" />
-              ) : (
-                <div className="flex items-center gap-2 mb-4">
-                  <div 
-                    className="h-8 w-8 rounded flex items-center justify-center text-white font-bold"
-                    style={{ backgroundColor: themeColor }}
-                  >
-                    {store.name.charAt(0)}
-                  </div>
-                  <span className="font-bold text-lg">{store.name}</span>
-                </div>
-              )}
-              {store.social_links?.phone && (
-                <p className="text-sm text-gray-600 mb-2">
-                  <Phone className="inline h-4 w-4 mr-2" />
-                  {store.social_links.phone}
-                </p>
-              )}
-              <div className="flex items-center gap-2 mt-4">
-                {store.social_links?.facebook && (
-                  <a 
-                    href={store.social_links.facebook} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
-                  >
-                    <FacebookLogo className="h-4 w-4" />
-                  </a>
-                )}
-                {store.social_links?.instagram && (
-                  <a 
-                    href={store.social_links.instagram} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
-                  >
-                    <InstagramLogo className="h-4 w-4" />
-                  </a>
-                )}
-                {store.social_links?.whatsapp && (
-                  <a 
-                    href={`https://wa.me/${store.social_links.whatsapp.replace(/\D/g, '')}`} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
-                  >
-                    <WhatsappLogo className="h-4 w-4" />
-                  </a>
-                )}
-              </div>
-            </div>
+      <StorefrontFooter 
+        store={store}
+        categories={categories}
+        username={params.username}
+      />
 
-            {/* Information */}
-            <div>
-              <h3 className="font-bold text-sm tracking-wide mb-4">INFORMATION</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li><Link href={`/${params.username}/about`} className="hover:text-gray-900">About Us</Link></li>
-                <li><Link href={`/${params.username}/privacy`} className="hover:text-gray-900">Privacy Policy</Link></li>
-                <li><Link href={`/${params.username}/shipping`} className="hover:text-gray-900">Shipping Information</Link></li>
-                <li><Link href={`/${params.username}/returns`} className="hover:text-gray-900">Returns & Refunds</Link></li>
-              </ul>
-            </div>
+      {/* Floating Buttons */}
+      <FloatingButtons 
+        username={params.username}
+        themeColor={themeColor}
+        whatsappNumber={store.social_links?.whatsapp}
+      />
 
-            {/* Contact Info */}
-            <div>
-              <h3 className="font-bold text-sm tracking-wide mb-4">CONTACT INFO</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                {store.address && (
-                  <li className="flex items-start gap-2">
-                    <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>
-                      {[store.address.street, store.address.city, store.address.state, store.address.country]
-                        .filter(Boolean)
-                        .join(", ")}
-                    </span>
-                  </li>
-                )}
-                <li className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 flex-shrink-0" />
-                  <span>SAT - FRI, 10AM - 11PM</span>
-                </li>
-                {store.social_links?.email && (
-                  <li className="flex items-center gap-2">
-                    <Envelope className="h-4 w-4 flex-shrink-0" />
-                    <a href={`mailto:${store.social_links.email}`} className="hover:text-gray-900">
-                      {store.social_links.email}
-                    </a>
-                  </li>
-                )}
-              </ul>
-            </div>
+      {/* Quick View Modal */}
+      <QuickViewModal
+        product={quickViewProduct}
+        isOpen={isQuickViewOpen}
+        onClose={() => setIsQuickViewOpen(false)}
+        themeColor={themeColor}
+        currency={store.currency}
+        username={params.username}
+      />
+    </div>
+  )
+}
 
-            {/* Follow Us */}
-            <div>
-              <h3 className="font-bold text-sm tracking-wide mb-4">FOLLOW US</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Follow us on social media for updates and offers.
-              </p>
-            </div>
+// Product Carousel Component with scroll arrows
+function ProductCarousel({ 
+  products, 
+  username, 
+  themeColor,
+  currency = "BDT",
+  onQuickView
+}: { 
+  products: Product[]
+  username: string
+  themeColor: string
+  currency?: string
+  onQuickView?: (product: Product) => void
+}) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [showLeftArrow, setShowLeftArrow] = useState(false)
+  const [showRightArrow, setShowRightArrow] = useState(false)
+
+  // Check scroll position to show/hide arrows
+  const checkScrollPosition = () => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const { scrollLeft, scrollWidth, clientWidth } = container
+    setShowLeftArrow(scrollLeft > 0)
+    setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 10)
+  }
+
+  useEffect(() => {
+    checkScrollPosition()
+    const container = scrollContainerRef.current
+    if (container) {
+      container.addEventListener('scroll', checkScrollPosition)
+      // Also check on resize
+      window.addEventListener('resize', checkScrollPosition)
+    }
+    return () => {
+      if (container) {
+        container.removeEventListener('scroll', checkScrollPosition)
+      }
+      window.removeEventListener('resize', checkScrollPosition)
+    }
+  }, [products])
+
+  const scroll = (direction: 'left' | 'right') => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const cardWidth = 220 + 16 // card width + gap
+    const scrollAmount = cardWidth * 3 // Scroll 3 cards at a time
+    
+    container.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth'
+    })
+  }
+
+  return (
+    <div className="relative">
+      {/* Scroll Container */}
+      <div 
+        ref={scrollContainerRef}
+        className="flex gap-4 overflow-x-auto pb-4 scroll-smooth px-1"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        <style jsx>{`
+          div::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
+        {products.map((product) => (
+          <div key={product.id} className="flex-shrink-0 w-[220px]">
+            <ProductCard 
+              product={product} 
+              username={username}
+              themeColor={themeColor}
+              currency={currency}
+              onQuickView={onQuickView}
+            />
           </div>
-
-          {/* Payment Methods Placeholder */}
-          <div className="mt-8 pt-8 border-t border-black/10">
-            <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
-              <div className="h-6 w-10 bg-gray-100 rounded" />
-              <div className="h-6 w-10 bg-gray-100 rounded" />
-              <div className="h-6 w-10 bg-gray-100 rounded" />
-              <div className="h-6 w-10 bg-gray-100 rounded" />
-              <div className="h-6 w-10 bg-gray-100 rounded" />
-            </div>
-          </div>
-
-          {/* Copyright */}
-          <div className="text-center text-sm text-gray-500">
-            <p>© {new Date().getFullYear()} {store.name}. All rights reserved.</p>
-            <p className="mt-1">
-              Powered by <Link href="https://sellium.store" className="font-medium text-gray-700 hover:underline">Sellium</Link>
-            </p>
-          </div>
-        </div>
-      </footer>
-
-      {/* Floating Cart Button */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <button 
-          className="flex items-center gap-2 px-4 py-3 text-white rounded-full shadow-lg transition-transform hover:scale-105"
-          style={{ backgroundColor: themeColor }}
-        >
-          <ShoppingBag className="h-5 w-5" />
-          <span className="text-sm font-medium">{cartCount} item</span>
-        </button>
+        ))}
       </div>
-
-      {/* WhatsApp Button */}
-      {store.social_links?.whatsapp && (
-        <a
-          href={`https://wa.me/${store.social_links.whatsapp.replace(/\D/g, '')}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="fixed bottom-6 left-6 z-50 w-14 h-14 bg-green-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-green-600 transition-colors"
+      
+      {/* Left Arrow - Show when can scroll left */}
+      {showLeftArrow && (
+        <button 
+          onClick={() => scroll('left')}
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-white shadow-lg rounded-full flex items-center justify-center hover:bg-gray-50 transition-all z-20 border border-gray-200"
         >
-          <WhatsappLogo className="h-7 w-7" weight="fill" />
-        </a>
+          <CaretLeft className="h-5 w-5 text-gray-700" />
+        </button>
+      )}
+      
+      {/* Right Arrow - Show when can scroll right */}
+      {showRightArrow && (
+        <button 
+          onClick={() => scroll('right')}
+          className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-white shadow-lg rounded-full flex items-center justify-center hover:bg-gray-50 transition-all z-20 border border-gray-200"
+        >
+          <CaretRight className="h-5 w-5 text-gray-700" />
+        </button>
       )}
     </div>
   )
@@ -677,47 +635,136 @@ export default function StorefrontPage({ params }: { params: { username: string 
 function ProductCard({ 
   product, 
   username, 
-  themeColor 
+  themeColor,
+  currency = "BDT",
+  onQuickView
 }: { 
   product: Product
   username: string
   themeColor: string
+  currency?: string
+  onQuickView?: (product: Product) => void
 }) {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [isAdding, setIsAdding] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const { addItem, removeByProductId, isInCart } = useCart()
+  
+  // Get all product images - combine images array with image_url fallback
+  const productImages = product.images?.length 
+    ? product.images 
+    : product.image_url 
+      ? [product.image_url] 
+      : []
+  
+  const hasMultipleImages = productImages.length > 1
+  
+  // Auto-slide for product images
+  useEffect(() => {
+    if (!hasMultipleImages) return
+    
+    const timer = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % productImages.length)
+    }, 3000) // Change image every 3 seconds
+    
+    return () => clearInterval(timer)
+  }, [hasMultipleImages, productImages.length])
+  
   const hasDiscount = product.compare_at_price && product.compare_at_price > product.price
   const discountPercent = hasDiscount 
     ? Math.round(((product.compare_at_price! - product.price) / product.compare_at_price!) * 100)
     : 0
+  const isOutOfStock = product.stock === null || product.stock === undefined || product.stock <= 0
+  const inCart = isInCart(product.id)
+
+  const handleCartClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (isOutOfStock || isAdding) return
+    
+    setIsAdding(true)
+    
+    if (inCart) {
+      // Remove from cart
+      removeByProductId(product.id, undefined)
+      toast.success(`${product.name} removed from cart`)
+    } else {
+      // Add to cart
+      addItem({
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        compareAtPrice: product.compare_at_price || undefined,
+        quantity: 1,
+        image: productImages[0] || null,
+        stock: product.stock || 0,
+        sku: undefined
+      })
+      toast.success(`${product.name} added to cart`)
+    }
+    
+    setTimeout(() => setIsAdding(false), 500)
+  }
 
   return (
-    <div className="group bg-white border border-black/10 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
+    <div className={`group bg-white border border-black/10 rounded-lg overflow-hidden hover:shadow-lg transition-shadow ${isOutOfStock ? 'opacity-75' : ''}`}>
       <Link href={`/${username}/products/${product.slug || product.id}`}>
-        <div className="relative aspect-square bg-gray-100">
-          {product.image_url ? (
-            <img 
-              src={product.image_url} 
-              alt={product.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
+        <div className="relative aspect-square bg-gray-100 overflow-hidden">
+          {productImages.length > 0 ? (
+            <>
+              {productImages.map((imageUrl, index) => (
+                <img 
+                  key={index}
+                  src={imageUrl} 
+                  alt={`${product.name} ${index + 1}`}
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+                    currentImageIndex === index ? "opacity-100" : "opacity-0"
+                  } ${isOutOfStock ? 'grayscale' : ''}`}
+                />
+              ))}
+            </>
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <ShoppingBag className="h-12 w-12 text-gray-300" />
             </div>
           )}
           
-          {/* Discount Badge */}
-          {hasDiscount && (
+          {/* Stock Out Badge - Priority over discount badge */}
+          {isOutOfStock ? (
+            <div className="absolute top-2 left-2 px-2 py-1 text-xs font-bold text-white bg-gray-600 rounded z-10">
+              STOCK OUT
+            </div>
+          ) : hasDiscount ? (
+            /* Discount Badge */
             <div 
-              className="absolute top-2 left-2 px-2 py-1 text-xs font-bold text-white rounded"
+              className="absolute top-2 left-2 px-2 py-1 text-xs font-bold text-white rounded z-10"
               style={{ backgroundColor: themeColor }}
             >
               {discountPercent} BDT OFF
             </div>
-          )}
+          ) : null}
 
-          {/* Store Logo Watermark */}
-          <div className="absolute bottom-2 right-2 px-2 py-1 bg-white/90 rounded text-xs font-medium">
-            {username.toUpperCase()}
-          </div>
+          {/* Hot Badge - Show if product has more than 10 daily sales */}
+          {product.is_hot && !isOutOfStock && (
+            <div className="absolute top-2 right-2 px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded z-10 flex items-center gap-1">
+              🔥 HOT
+            </div>
+          )}
+          
+          {/* Image Dots - Only show if multiple images */}
+          {hasMultipleImages && (
+            <div className="absolute bottom-2 left-2 flex gap-1 z-10">
+              {productImages.map((_, index) => (
+                <div
+                  key={index}
+                  className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                    currentImageIndex === index ? "bg-white" : "bg-white/50"
+                  }`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </Link>
 
@@ -729,19 +776,43 @@ function ProductCard({
         </Link>
         
         <div className="mt-2 flex items-center gap-2">
-          <span className="font-bold" style={{ color: themeColor }}>
-            TK. {product.price.toFixed(2)}
+          <span className="font-bold" style={{ color: isOutOfStock ? '#9ca3af' : themeColor }}>
+            {formatPrice(product.price, currency)}
           </span>
           {hasDiscount && (
             <span className="text-sm text-gray-400 line-through">
-              TK. {product.compare_at_price!.toFixed(2)}
+              {formatPrice(product.compare_at_price!, currency)}
             </span>
           )}
         </div>
 
-        <button className="mt-3 w-full py-2 text-sm font-medium border border-black/10 rounded hover:bg-gray-50 transition-colors">
-          Quick View
-        </button>
+        <div className="mt-3 flex gap-2">
+          <button 
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onQuickView?.(product)
+            }}
+            className={`${isOutOfStock ? 'flex-1' : ''} py-2 px-3 text-sm font-medium border border-black/10 rounded hover:bg-gray-50 transition-colors`}
+          >
+            Quick View
+          </button>
+          {!isOutOfStock && (
+            <button 
+              onClick={handleCartClick}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+              className={`flex-1 py-2 text-sm font-medium text-white rounded transition-all flex items-center justify-center ${isAdding ? 'scale-95' : ''}`}
+              style={{ backgroundColor: inCart ? (isHovered ? '#ef4444' : '#22c55e') : themeColor }}
+            >
+              {inCart ? (
+                isHovered ? <X className="h-5 w-5" /> : <Check className="h-5 w-5" />
+              ) : (
+                <ShoppingCart className="h-5 w-5" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -1,11 +1,13 @@
 "use client"
+/* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Package, ShoppingCart, CurrencyDollar, Users, CheckCircle, ArrowSquareOut, Circle } from "phosphor-react"
+import { Package, ShoppingCart, CurrencyDollar, Users, CheckCircle, ArrowSquareOut, Circle, ShoppingBag } from "phosphor-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { Badge } from "@/components/ui/badge"
 
 interface Store {
   id: string
@@ -14,6 +16,7 @@ interface Store {
   status: string
   plan: string
   business_type: string
+  currency?: string
 }
 
 interface Stats {
@@ -21,6 +24,25 @@ interface Stats {
   totalOrders: number
   totalProducts: number
   totalCustomers: number
+}
+
+interface RecentOrder {
+  id: string
+  order_number: string
+  customer_name: string
+  customer_email: string
+  total_amount: number
+  status: string
+  created_at: string
+  order_items?: { product_name: string; price: number; image_url: string | null }[]
+}
+
+interface TopProduct {
+  id: string
+  name: string
+  image_url: string | null
+  price: number
+  total_sold: number
 }
 
 const planLimits: Record<string, { traffic: string; products: number }> = {
@@ -40,6 +62,8 @@ export default function DashboardPage() {
     totalProducts: 0,
     totalCustomers: 0,
   })
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -95,6 +119,73 @@ export default function DashboardPage() {
         totalCustomers: customersResult.count || 0,
       })
 
+      // Fetch recent orders (last 5)
+      const { data: recentOrdersData } = await supabase
+        .from("orders")
+        .select("id, order_number, customer_name, customer_email, total, status, created_at")
+        .eq("store_id", storeData.id)
+        .order("created_at", { ascending: false })
+        .limit(5)
+
+      if (recentOrdersData && recentOrdersData.length > 0) {
+        // Fetch order items for these orders to get product names, prices and images
+        const orderIds = recentOrdersData.map(o => o.id)
+        const { data: orderItemsData } = await supabase
+          .from("order_items")
+          .select("order_id, product_name, price, image_url")
+          .in("order_id", orderIds)
+
+        // Map order items to orders
+        const ordersWithItems = recentOrdersData.map(order => ({
+          ...order,
+          total_amount: order.total, // Map total to total_amount for consistency
+          order_items: orderItemsData?.filter(item => item.order_id === order.id) || []
+        }))
+
+        setRecentOrders(ordersWithItems)
+      }
+
+      // Fetch top products by total sales
+      // First, get order items grouped by product
+      const { data: orderItemsData } = await supabase
+        .from("order_items")
+        .select(`
+          product_id,
+          quantity,
+          products!inner(id, name, image_url, price, store_id)
+        `)
+        .eq("products.store_id", storeData.id)
+
+      if (orderItemsData && orderItemsData.length > 0) {
+        // Aggregate sales by product
+        const productSales: Record<string, { product: any; totalSold: number }> = {}
+        
+        orderItemsData.forEach((item: any) => {
+          const productId = item.product_id
+          if (!productSales[productId]) {
+            productSales[productId] = {
+              product: item.products,
+              totalSold: 0
+            }
+          }
+          productSales[productId].totalSold += item.quantity
+        })
+
+        // Convert to array and sort by total sold
+        const topProductsList = Object.values(productSales)
+          .sort((a, b) => b.totalSold - a.totalSold)
+          .slice(0, 5)
+          .map(item => ({
+            id: item.product.id,
+            name: item.product.name,
+            image_url: item.product.image_url,
+            price: item.product.price,
+            total_sold: item.totalSold
+          }))
+
+        setTopProducts(topProductsList)
+      }
+
       setLoading(false)
     }
 
@@ -119,7 +210,10 @@ export default function DashboardPage() {
     )
   }
 
-  const storefrontUrl = `/${store.username}`
+  // In production, use sellium.store/username. In development, use localhost:3000/username
+  const storefrontUrl = process.env.NODE_ENV === 'production' 
+    ? `https://sellium.store/${store.username}`
+    : `http://localhost:3000/${store.username}`
   const planInfo = planLimits[store.plan] || planLimits.free
   const statusColor = store.status === "active" ? "text-green-600 bg-green-500/10" : "text-yellow-600 bg-yellow-500/10"
 
@@ -260,32 +354,148 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Recent Orders</CardTitle>
-            <CardDescription>
-              {stats.totalOrders === 0 ? "You have no orders yet." : `You have ${stats.totalOrders} orders.`}
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <h3 className="text-[20px] font-normal">Recent Orders</h3>
+              <CardDescription>
+                {recentOrders.length === 0 ? "You have no orders yet." : `You have ${stats.totalOrders} order${stats.totalOrders !== 1 ? 's' : ''}.`}
+              </CardDescription>
+            </div>
+            {stats.totalOrders > 0 && (
+              <Link 
+                href="/dashboard/orders" 
+                className="text-sm text-primary hover:underline"
+              >
+                View all
+              </Link>
+            )}
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-center h-[200px] text-muted-foreground">
-              No orders to display
-            </div>
+            {recentOrders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
+                <ShoppingCart className="h-10 w-10 mb-2 opacity-50" />
+                <p>No orders to display</p>
+                <p className="text-xs mt-1">Orders will appear here once customers start purchasing.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {recentOrders.map((order, index) => {
+                  // Get first item for display (show image and name of first product)
+                  const firstItem = order.order_items?.[0]
+                  const itemCount = order.order_items?.length || 0
+                  const displayName = firstItem?.product_name || "No products"
+                  const displayPrice = firstItem?.price || 0
+                  const hasMoreItems = itemCount > 1
+                  
+                  return (
+                    <div key={order.id} className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-muted-foreground w-4">{index + 1}</span>
+                      <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                        {firstItem?.image_url ? (
+                          <img 
+                            src={firstItem.image_url} 
+                            alt={displayName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <ShoppingBag className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {displayName}
+                          {hasMoreItems && <span className="text-muted-foreground"> +{itemCount - 1} more</span>}
+                        </p>
+                        <p className="text-xs text-muted-foreground">${displayPrice.toFixed(2)}</p>
+                      </div>
+                      <OrderStatusBadge status={order.status} />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card className="col-span-4 lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Top Products</CardTitle>
-            <CardDescription>
-              Your best selling products.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <h3 className="text-[20px] font-normal">Top Products</h3>
+              <CardDescription>
+                Your best selling products.
+              </CardDescription>
+            </div>
+            {topProducts.length > 0 && (
+              <Link 
+                href="/dashboard/products" 
+                className="text-sm text-primary hover:underline"
+              >
+                View all
+              </Link>
+            )}
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-center h-[200px] text-muted-foreground">
-              No products yet
-            </div>
+            {topProducts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
+                <Package className="h-10 w-10 mb-2 opacity-50" />
+                <p>No products yet</p>
+                <p className="text-xs mt-1">Add products to see your best sellers.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {topProducts.map((product, index) => (
+                  <div key={product.id} className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-muted-foreground w-4">{index + 1}</span>
+                    <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                      {product.image_url ? (
+                        <img 
+                          src={product.image_url} 
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ShoppingBag className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{product.name}</p>
+                      <p className="text-xs text-muted-foreground">${product.price.toFixed(2)}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold">{product.total_sold}</span>
+                      <span className="text-xs text-muted-foreground ml-1">sold</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
     </div>
+  )
+}
+
+// Order Status Badge Component
+function OrderStatusBadge({ status }: { status: string }) {
+  const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+    pending: { label: "Pending", variant: "secondary" },
+    processing: { label: "Processing", variant: "default" },
+    shipped: { label: "Shipped", variant: "default" },
+    delivered: { label: "Delivered", variant: "default" },
+    completed: { label: "Completed", variant: "default" },
+    cancelled: { label: "Cancelled", variant: "destructive" },
+    refunded: { label: "Refunded", variant: "outline" },
+  }
+
+  const config = statusConfig[status] || { label: status, variant: "secondary" as const }
+
+  return (
+    <Badge variant={config.variant} className="text-xs capitalize">
+      {config.label}
+    </Badge>
   )
 }

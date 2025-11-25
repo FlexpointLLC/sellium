@@ -2,11 +2,18 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ShoppingCart, MagnifyingGlass, Eye, Plus } from "phosphor-react"
-import { Button } from "@/components/ui/button"
+import { ShoppingCart, MagnifyingGlass } from "phosphor-react"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { createClient } from "@/lib/supabase/client"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { toast } from "sonner"
 
 interface Order {
   id: string
@@ -26,21 +33,38 @@ interface Store {
 }
 
 const statusColors: Record<string, string> = {
-  pending: "bg-yellow-500/10 text-yellow-500",
-  processing: "bg-blue-500/10 text-blue-500",
-  shipped: "bg-purple-500/10 text-purple-500",
-  delivered: "bg-green-500/10 text-green-500",
-  cancelled: "bg-red-500/10 text-red-500",
-  refunded: "bg-gray-500/10 text-gray-500",
+  pending: "bg-yellow-500/10 text-yellow-500 border-yellow-500/30",
+  processing: "bg-blue-500/10 text-blue-500 border-blue-500/30",
+  shipped: "bg-purple-500/10 text-purple-500 border-purple-500/30",
+  delivered: "bg-green-500/10 text-green-500 border-green-500/30",
+  cancelled: "bg-red-500/10 text-red-500 border-red-500/30",
+  refunded: "bg-gray-500/10 text-gray-500 border-gray-500/30",
 }
 
 const paymentStatusColors: Record<string, string> = {
-  pending: "bg-yellow-500/10 text-yellow-500",
-  paid: "bg-green-500/10 text-green-500",
-  failed: "bg-red-500/10 text-red-500",
-  refunded: "bg-gray-500/10 text-gray-500",
-  partially_refunded: "bg-orange-500/10 text-orange-500",
+  pending: "bg-yellow-500/10 text-yellow-500 border-yellow-500/30",
+  paid: "bg-green-500/10 text-green-500 border-green-500/30",
+  failed: "bg-red-500/10 text-red-500 border-red-500/30",
+  refunded: "bg-gray-500/10 text-gray-500 border-gray-500/30",
+  partially_refunded: "bg-orange-500/10 text-orange-500 border-orange-500/30",
 }
+
+const statusOptions = [
+  { value: "pending", label: "Pending" },
+  { value: "processing", label: "Processing" },
+  { value: "shipped", label: "Shipped" },
+  { value: "delivered", label: "Delivered" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "refunded", label: "Refunded" },
+]
+
+const paymentStatusOptions = [
+  { value: "pending", label: "Pending" },
+  { value: "paid", label: "Paid" },
+  { value: "failed", label: "Failed" },
+  { value: "refunded", label: "Refunded" },
+  { value: "partially_refunded", label: "Partially Refunded" },
+]
 
 export default function OrdersPage() {
   const router = useRouter()
@@ -125,6 +149,42 @@ export default function OrdersPage() {
     })
   }
 
+  async function updateOrderStatus(orderId: string, newStatus: string) {
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: newStatus })
+      .eq("id", orderId)
+
+    if (error) {
+      toast.error("Failed to update order status")
+      return
+    }
+
+    // Update local state
+    setOrders(orders.map(order => 
+      order.id === orderId ? { ...order, status: newStatus } : order
+    ))
+    toast.success("Order status updated")
+  }
+
+  async function updatePaymentStatus(orderId: string, newStatus: string) {
+    const { error } = await supabase
+      .from("orders")
+      .update({ payment_status: newStatus })
+      .eq("id", orderId)
+
+    if (error) {
+      toast.error("Failed to update payment status")
+      return
+    }
+
+    // Update local state
+    setOrders(orders.map(order => 
+      order.id === orderId ? { ...order, payment_status: newStatus } : order
+    ))
+    toast.success("Payment status updated")
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl flex flex-col gap-6">
@@ -155,6 +215,30 @@ export default function OrdersPage() {
         </div>
       </div>
 
+      {/* Summary Stats */}
+      {orders.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Total Orders</p>
+            <p className="text-2xl font-semibold">{orders.length}</p>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Pending</p>
+            <p className="text-2xl font-semibold">{orders.filter(o => o.status === "pending").length}</p>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Processing</p>
+            <p className="text-2xl font-semibold">{orders.filter(o => o.status === "processing").length}</p>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Total Revenue</p>
+            <p className="text-2xl font-semibold">
+              ${orders.filter(o => o.payment_status === "paid").reduce((sum, o) => sum + o.total, 0).toFixed(2)}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <MagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -178,13 +262,12 @@ export default function OrdersPage() {
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Status</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Payment</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Date</th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground w-16">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={7}>
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <ShoppingCart className="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <p className="text-muted-foreground">
@@ -213,57 +296,58 @@ export default function OrdersPage() {
                   <td className="px-6 py-4">{order.item_count}</td>
                   <td className="px-6 py-4 font-medium">${order.total.toFixed(2)}</td>
                   <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${statusColors[order.status] || "bg-gray-500/10 text-gray-500"}`}
+                    <Select
+                      value={order.status}
+                      onValueChange={(value) => updateOrderStatus(order.id, value)}
                     >
-                      {order.status}
-                    </span>
+                      <SelectTrigger 
+                        className={`w-[130px] h-8 text-xs font-medium capitalize border ${statusColors[order.status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((option) => (
+                          <SelectItem 
+                            key={option.value} 
+                            value={option.value}
+                            className="text-xs capitalize"
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </td>
                   <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${paymentStatusColors[order.payment_status] || "bg-gray-500/10 text-gray-500"}`}
+                    <Select
+                      value={order.payment_status}
+                      onValueChange={(value) => updatePaymentStatus(order.id, value)}
                     >
-                      {order.payment_status.replace("_", " ")}
-                    </span>
+                      <SelectTrigger 
+                        className={`w-[140px] h-8 text-xs font-medium capitalize border ${paymentStatusColors[order.payment_status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {paymentStatusOptions.map((option) => (
+                          <SelectItem 
+                            key={option.value} 
+                            value={option.value}
+                            className="text-xs capitalize"
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </td>
                   <td className="px-6 py-4 text-muted-foreground">{formatDate(order.created_at)}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon-sm">
-                        <Eye />
-                      </Button>
-                    </div>
-                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
-
-      {/* Summary Stats */}
-      {orders.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-sm text-muted-foreground">Total Orders</p>
-            <p className="text-2xl font-semibold">{orders.length}</p>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-sm text-muted-foreground">Pending</p>
-            <p className="text-2xl font-semibold">{orders.filter(o => o.status === "pending").length}</p>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-sm text-muted-foreground">Processing</p>
-            <p className="text-2xl font-semibold">{orders.filter(o => o.status === "processing").length}</p>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-sm text-muted-foreground">Total Revenue</p>
-            <p className="text-2xl font-semibold">
-              ${orders.filter(o => o.payment_status === "paid").reduce((sum, o) => sum + o.total, 0).toFixed(2)}
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

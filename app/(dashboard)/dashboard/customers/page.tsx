@@ -59,10 +59,16 @@ interface Store {
 }
 
 const statusColors: Record<string, string> = {
-  active: "bg-green-500/10 text-green-500",
-  inactive: "bg-gray-500/10 text-gray-500",
-  blocked: "bg-red-500/10 text-red-500",
+  active: "bg-green-500/10 text-green-500 border-green-500/30",
+  inactive: "bg-gray-500/10 text-gray-500 border-gray-500/30",
+  blocked: "bg-red-500/10 text-red-500 border-red-500/30",
 }
+
+const statusOptions = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "blocked", label: "Blocked" },
+]
 
 export default function CustomersPage() {
   const router = useRouter()
@@ -261,6 +267,24 @@ export default function CustomersPage() {
     toast.success("Customer deleted successfully")
   }
 
+  async function updateCustomerStatus(customerId: string, newStatus: string) {
+    const { error } = await supabase
+      .from("customers")
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq("id", customerId)
+
+    if (error) {
+      toast.error("Failed to update customer status")
+      return
+    }
+
+    // Update local state
+    setCustomers(customers.map(customer => 
+      customer.id === customerId ? { ...customer, status: newStatus } : customer
+    ))
+    toast.success("Customer status updated")
+  }
+
   const filteredCustomers = customers.filter(customer =>
     (customer.name && customer.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
     customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -317,6 +341,30 @@ export default function CustomersPage() {
           Add Customer
         </Button>
       </div>
+
+      {/* Summary Stats */}
+      {customers.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Total Customers</p>
+            <p className="text-2xl font-semibold">{customers.length}</p>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Active</p>
+            <p className="text-2xl font-semibold">{customers.filter(c => c.status === "active").length}</p>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Total Orders</p>
+            <p className="text-2xl font-semibold">{customers.reduce((sum, c) => sum + c.total_orders, 0)}</p>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Total Revenue</p>
+            <p className="text-2xl font-semibold">
+              ${customers.reduce((sum, c) => sum + c.total_spent, 0).toFixed(2)}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
@@ -376,11 +424,27 @@ export default function CustomersPage() {
                   <td className="px-6 py-4">{customer.total_orders}</td>
                   <td className="px-6 py-4 font-medium">${customer.total_spent.toFixed(2)}</td>
                   <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${statusColors[customer.status] || "bg-gray-500/10 text-gray-500"}`}
+                    <Select
+                      value={customer.status}
+                      onValueChange={(value) => updateCustomerStatus(customer.id, value)}
                     >
-                      {customer.status}
-                    </span>
+                      <SelectTrigger 
+                        className={`w-[110px] h-8 text-xs font-medium capitalize border ${statusColors[customer.status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((option) => (
+                          <SelectItem 
+                            key={option.value} 
+                            value={option.value}
+                            className="text-xs capitalize"
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </td>
                   <td className="px-6 py-4 text-muted-foreground">{formatDate(customer.created_at)}</td>
                   <td className="px-6 py-4">
@@ -402,30 +466,6 @@ export default function CustomersPage() {
           </tbody>
         </table>
       </div>
-
-      {/* Summary Stats */}
-      {customers.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-sm text-muted-foreground">Total Customers</p>
-            <p className="text-2xl font-semibold">{customers.length}</p>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-sm text-muted-foreground">Active</p>
-            <p className="text-2xl font-semibold">{customers.filter(c => c.status === "active").length}</p>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-sm text-muted-foreground">Total Orders</p>
-            <p className="text-2xl font-semibold">{customers.reduce((sum, c) => sum + c.total_orders, 0)}</p>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-sm text-muted-foreground">Total Revenue</p>
-            <p className="text-2xl font-semibold">
-              ${customers.reduce((sum, c) => sum + c.total_spent, 0).toFixed(2)}
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Add Customer Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

@@ -4,17 +4,23 @@ import { updateSession } from '@/lib/supabase/middleware'
 // Routes that don't require authentication (for admin subdomain)
 const publicRoutes = ['/', '/login', '/verify', '/auth/callback', '/onboarding']
 
+// Dashboard/admin routes that require authentication
+const dashboardRoutes = ['/dashboard', '/login', '/verify', '/onboarding', '/auth']
+
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || ''
   const pathname = request.nextUrl.pathname
   
-  // Check if we're on the admin subdomain (admin.sellium.store or localhost for dev)
-  const isAdminSubdomain = hostname.startsWith('admin.') || 
-                           hostname.startsWith('localhost') || 
-                           hostname.startsWith('127.0.0.1')
+  // Check if we're on the admin subdomain (admin.sellium.store)
+  // For localhost, we determine admin vs storefront by the route path
+  const isAdminSubdomain = hostname.startsWith('admin.')
   
-  // If on admin subdomain, handle dashboard authentication
-  if (isAdminSubdomain) {
+  // For localhost development, check if it's a dashboard/admin route
+  const isLocalhost = hostname.startsWith('localhost') || hostname.startsWith('127.0.0.1')
+  const isDashboardRoute = dashboardRoutes.some(route => pathname.startsWith(route)) || pathname === '/'
+  
+  // Handle admin/dashboard routes (admin subdomain OR localhost dashboard routes)
+  if (isAdminSubdomain || (isLocalhost && isDashboardRoute)) {
     const { response, user } = await updateSession(request)
     
     // Check if the route is public
@@ -37,8 +43,8 @@ export async function middleware(request: NextRequest) {
     return response
   }
   
-  // For main domain (sellium.store), serve storefront routes
-  // The /[username] route will handle the storefront
+  // For storefront routes (main domain or localhost with /[username] routes)
+  // Just pass through - no auth required for storefront
   return NextResponse.next()
 }
 
