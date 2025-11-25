@@ -24,7 +24,7 @@ export default function EarningsPage() {
   return (
     <div className="mx-auto max-w-6xl flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-medium">Earnings</h1>
+        <h1 className="text-xl font-normal">Earnings</h1>
         <p className="text-sm font-normal text-muted-foreground">Track your revenue and payouts</p>
       </div>
 

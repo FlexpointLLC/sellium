@@ -21,7 +21,7 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-medium">Dashboard</h1>
+          <h1 className="text-xl font-normal">Dashboard</h1>
           <p className="text-sm font-normal text-muted-foreground">
             Welcome back! Here&apos;s an overview of your store.
           </p>
