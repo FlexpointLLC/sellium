@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { 
   Package, Plus, MagnifyingGlass, Pencil, Trash, X, 
-  CaretRight, CaretLeft, Check, Stack, Lightning
+  CaretRight, CaretLeft, Check, Stack, Lightning, Image as ImageIcon, Upload
 } from "phosphor-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -122,8 +122,15 @@ export default function ProductsPage() {
     stock: "",
     status: "draft",
     category_id: "",
-    has_variants: false
+    has_variants: false,
+    image_url: ""
   })
+  
+  // Image upload states
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>("")
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
   // Variant options
   const [productOptions, setProductOptions] = useState<ProductOption[]>([])
@@ -242,7 +249,8 @@ export default function ProductsPage() {
       stock: "",
       status: "draft",
       category_id: "",
-      has_variants: false
+      has_variants: false,
+      image_url: ""
     })
     setProductOptions([])
     setGeneratedVariants([])
@@ -250,6 +258,76 @@ export default function ProductsPage() {
     setEditWizardStep(1)
     setSelectedProduct(null)
     setFormError(null)
+    resetImageState()
+  }
+
+  function handleImageSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file")
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Image size should be less than 5MB")
+      return
+    }
+
+    setImageFile(file)
+    
+    // Create preview
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  async function uploadImage(file: File, productSlug: string): Promise<string | null> {
+    if (!store) return null
+
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${store.id}/products/${productSlug}-${Date.now()}.${fileExt}`
+
+    const { data, error } = await supabase.storage
+      .from('Sellium')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: true
+      })
+
+    if (error) {
+      console.error("Error uploading image:", error)
+      return null
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('Sellium')
+      .getPublicUrl(fileName)
+
+    return publicUrl
+  }
+
+  function removeImage() {
+    setFormData({ ...formData, image_url: "" })
+    setImageFile(null)
+    setImagePreview("")
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  function resetImageState() {
+    setImageFile(null)
+    setImagePreview("")
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
   }
 
   function addOption() {
@@ -414,6 +492,17 @@ export default function ProductsPage() {
     const sku = formData.sku.trim() || null
     const productSlug = formData.slug || generateSlug(formData.name)
     
+    // Upload image if selected
+    let imageUrl: string | null = formData.image_url || null
+    if (imageFile) {
+      setUploadingImage(true)
+      const newImageUrl = await uploadImage(imageFile, productSlug)
+      if (newImageUrl) {
+        imageUrl = newImageUrl
+      }
+      setUploadingImage(false)
+    }
+    
     // Check if SKU already exists
     if (sku) {
       const { data: existingProduct } = await supabase
@@ -439,6 +528,7 @@ export default function ProductsPage() {
             category_id: formData.category_id || null,
             has_variants: formData.has_variants,
             variant_count: variantCount,
+            image_url: imageUrl,
           }
 
           const { data, error } = await supabase
@@ -522,6 +612,7 @@ export default function ProductsPage() {
       category_id: formData.category_id || null,
       has_variants: formData.has_variants,
       variant_count: variantCount,
+      image_url: imageUrl,
     }
 
     const { data, error } = await supabase
@@ -621,8 +712,10 @@ export default function ProductsPage() {
       stock: product.stock.toString(),
       status: product.status,
       category_id: product.category_id || "",
-      has_variants: product.has_variants || false
+      has_variants: product.has_variants || false,
+      image_url: product.image_url || ""
     })
+    resetImageState()
     
     // Load existing variants if product has variants
     if (product.has_variants) {
@@ -695,10 +788,22 @@ export default function ProductsPage() {
     setSaving(true)
 
     const variantCount = formData.has_variants ? generatedVariants.filter(v => v.enabled).length : 0
+    const productSlug = formData.slug || generateSlug(formData.name)
+
+    // Upload new image if selected
+    let imageUrl: string | null = formData.image_url || null
+    if (imageFile) {
+      setUploadingImage(true)
+      const newImageUrl = await uploadImage(imageFile, productSlug)
+      if (newImageUrl) {
+        imageUrl = newImageUrl
+      }
+      setUploadingImage(false)
+    }
 
     const productData = {
       name: formData.name.trim(),
-      slug: formData.slug || generateSlug(formData.name),
+      slug: productSlug,
       description: formData.description.trim() || null,
       price: parseFloat(formData.price) || 0,
       compare_at_price: formData.compare_at_price ? parseFloat(formData.compare_at_price) : null,
@@ -708,6 +813,7 @@ export default function ProductsPage() {
       category_id: formData.category_id || null,
       has_variants: formData.has_variants,
       variant_count: variantCount,
+      image_url: imageUrl,
     }
 
     const { error } = await supabase
@@ -1134,6 +1240,60 @@ export default function ProductsPage() {
             <p className="text-xs text-muted-foreground">
               {isEdit ? "Enter an existing SKU and click Lookup to auto-fill all fields" : "Enter an existing SKU to auto-fill fields, or create a new SKU for this product"}
             </p>
+          </div>
+        </div>
+
+        {/* Image Upload */}
+        <div className="space-y-2">
+          <Label>Product Image</Label>
+          <div className="flex items-start gap-4">
+            {(imagePreview || formData.image_url) ? (
+              <div className="relative">
+                <img 
+                  src={imagePreview || formData.image_url} 
+                  alt="Preview" 
+                  className="h-24 w-24 rounded-lg object-cover border"
+                />
+                <Button
+                  variant="destructive"
+                  size="icon-sm"
+                  className="absolute -top-2 -right-2 h-6 w-6"
+                  onClick={removeImage}
+                  type="button"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <div 
+                className="h-24 w-24 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground mt-1">Upload</span>
+              </div>
+            )}
+            <div className="flex-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageSelect}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload />
+                {(imagePreview || formData.image_url) ? "Change Image" : "Upload Image"}
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2">
+                Recommended: 800x800px. Max 5MB. JPG, PNG, or WebP.
+              </p>
+            </div>
           </div>
         </div>
 

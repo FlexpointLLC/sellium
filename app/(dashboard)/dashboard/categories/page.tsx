@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Folders, Plus, MagnifyingGlass, Pencil, Trash, X } from "phosphor-react"
+import { Folders, Plus, MagnifyingGlass, Pencil, Trash, X, Image as ImageIcon, Upload } from "phosphor-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,6 +39,7 @@ interface Category {
   slug: string
   description: string | null
   status: string
+  image_url: string | null
   store_id: string
   created_at: string
   product_count?: number
@@ -69,8 +70,13 @@ export default function CategoriesPage() {
     name: "",
     slug: "",
     description: "",
-    status: "active"
+    status: "active",
+    image_url: ""
   })
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>("")
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchData()
@@ -138,12 +144,89 @@ export default function CategoriesPage() {
     })
   }
 
+  function handleImageSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file")
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Image size should be less than 5MB")
+      return
+    }
+
+    setImageFile(file)
+    
+    // Create preview
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  async function uploadImage(file: File, categorySlug: string): Promise<string | null> {
+    if (!store) return null
+
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${store.id}/categories/${categorySlug}-${Date.now()}.${fileExt}`
+
+    const { data, error } = await supabase.storage
+      .from('Sellium')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: true
+      })
+
+    if (error) {
+      console.error("Error uploading image:", error)
+      return null
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('Sellium')
+      .getPublicUrl(fileName)
+
+    return publicUrl
+  }
+
+  function removeImage() {
+    setFormData({ ...formData, image_url: "" })
+    setImageFile(null)
+    setImagePreview("")
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  function resetImageState() {
+    setImageFile(null)
+    setImagePreview("")
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
   async function handleAddCategory() {
     if (!store || !formData.name.trim()) return
 
     setSaving(true)
 
     const slug = formData.slug || generateSlug(formData.name)
+
+    // Upload image if selected
+    let imageUrl: string | null = null
+    if (imageFile) {
+      setUploadingImage(true)
+      imageUrl = await uploadImage(imageFile, slug)
+      setUploadingImage(false)
+    }
 
     // Try to insert - the schema may or may not have a status column
     const { data, error } = await supabase
@@ -153,6 +236,7 @@ export default function CategoriesPage() {
         name: formData.name.trim(),
         slug: slug,
         description: formData.description.trim() || null,
+        image_url: imageUrl,
       })
       .select()
       .single()
@@ -166,7 +250,8 @@ export default function CategoriesPage() {
 
     setCategories([{ ...data, product_count: 0, status: data.status || 'active' }, ...categories])
     setIsAddDialogOpen(false)
-    setFormData({ name: "", slug: "", description: "", status: "active" })
+    setFormData({ name: "", slug: "", description: "", status: "active", image_url: "" })
+    resetImageState()
     setSaving(false)
   }
 
@@ -175,13 +260,27 @@ export default function CategoriesPage() {
 
     setSaving(true)
 
+    const slug = formData.slug || generateSlug(formData.name)
+
+    // Upload new image if selected
+    let imageUrl: string | null = formData.image_url || null
+    if (imageFile) {
+      setUploadingImage(true)
+      const newImageUrl = await uploadImage(imageFile, slug)
+      if (newImageUrl) {
+        imageUrl = newImageUrl
+      }
+      setUploadingImage(false)
+    }
+
     const { error } = await supabase
       .from("categories")
       .update({
         name: formData.name.trim(),
-        slug: formData.slug || generateSlug(formData.name),
+        slug: slug,
         description: formData.description.trim() || null,
-        status: formData.status
+        status: formData.status,
+        image_url: imageUrl,
       })
       .eq("id", selectedCategory.id)
 
@@ -193,12 +292,13 @@ export default function CategoriesPage() {
 
     setCategories(categories.map(cat => 
       cat.id === selectedCategory.id 
-        ? { ...cat, name: formData.name, slug: formData.slug, description: formData.description, status: formData.status }
+        ? { ...cat, name: formData.name, slug: formData.slug, description: formData.description, status: formData.status, image_url: imageUrl }
         : cat
     ))
     setIsEditDialogOpen(false)
     setSelectedCategory(null)
-    setFormData({ name: "", slug: "", description: "", status: "active" })
+    setFormData({ name: "", slug: "", description: "", status: "active", image_url: "" })
+    resetImageState()
     setSaving(false)
   }
 
@@ -230,7 +330,8 @@ export default function CategoriesPage() {
       name: category.name,
       slug: category.slug,
       description: category.description || "",
-      status: category.status
+      status: category.status,
+      image_url: category.image_url || ""
     })
     setIsEditDialogOpen(true)
   }
@@ -325,9 +426,17 @@ export default function CategoriesPage() {
                 <tr key={category.id} className="border-b last:border-0">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-                        <Folders className="h-4 w-4" />
-                      </div>
+                      {category.image_url ? (
+                        <img 
+                          src={category.image_url} 
+                          alt={category.name}
+                          className="h-9 w-9 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                          <Folders className="h-4 w-4" />
+                        </div>
+                      )}
                       <span className="font-medium">{category.name}</span>
                     </div>
                   </td>
@@ -373,7 +482,10 @@ export default function CategoriesPage() {
       </div>
 
       {/* Add Category Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+      <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+        setIsAddDialogOpen(open)
+        if (!open) resetImageState()
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Category</DialogTitle>
@@ -382,6 +494,58 @@ export default function CategoriesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Image Upload */}
+            <div className="space-y-2">
+              <Label>Category Image</Label>
+              <div className="flex items-start gap-4">
+                {imagePreview ? (
+                  <div className="relative">
+                    <img 
+                      src={imagePreview} 
+                      alt="Preview" 
+                      className="h-24 w-24 rounded-lg object-cover border"
+                    />
+                    <Button
+                      variant="destructive"
+                      size="icon-sm"
+                      className="absolute -top-2 -right-2 h-6 w-6"
+                      onClick={removeImage}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div 
+                    className="h-24 w-24 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground mt-1">Upload</span>
+                  </div>
+                )}
+                <div className="flex-1">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageSelect}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload />
+                    {imagePreview ? "Change Image" : "Upload Image"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Recommended: 400x400px. Max 5MB.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input
@@ -433,15 +597,18 @@ export default function CategoriesPage() {
             <Button variant="outline" size="sm" onClick={() => setIsAddDialogOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={handleAddCategory} disabled={saving || !formData.name.trim()}>
-              {saving ? "Creating..." : "Create Category"}
+            <Button size="sm" onClick={handleAddCategory} disabled={saving || uploadingImage || !formData.name.trim()}>
+              {uploadingImage ? "Uploading..." : saving ? "Creating..." : "Create Category"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Edit Category Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+        setIsEditDialogOpen(open)
+        if (!open) resetImageState()
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Category</DialogTitle>
@@ -450,6 +617,58 @@ export default function CategoriesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Image Upload */}
+            <div className="space-y-2">
+              <Label>Category Image</Label>
+              <div className="flex items-start gap-4">
+                {(imagePreview || formData.image_url) ? (
+                  <div className="relative">
+                    <img 
+                      src={imagePreview || formData.image_url} 
+                      alt="Preview" 
+                      className="h-24 w-24 rounded-lg object-cover border"
+                    />
+                    <Button
+                      variant="destructive"
+                      size="icon-sm"
+                      className="absolute -top-2 -right-2 h-6 w-6"
+                      onClick={removeImage}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div 
+                    className="h-24 w-24 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground mt-1">Upload</span>
+                  </div>
+                )}
+                <div className="flex-1">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageSelect}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload />
+                    {(imagePreview || formData.image_url) ? "Change Image" : "Upload Image"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Recommended: 400x400px. Max 5MB.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="edit-name">Name</Label>
               <Input
@@ -498,8 +717,8 @@ export default function CategoriesPage() {
             <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={handleEditCategory} disabled={saving || !formData.name.trim()}>
-              {saving ? "Saving..." : "Save Changes"}
+            <Button size="sm" onClick={handleEditCategory} disabled={saving || uploadingImage || !formData.name.trim()}>
+              {uploadingImage ? "Uploading..." : saving ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
