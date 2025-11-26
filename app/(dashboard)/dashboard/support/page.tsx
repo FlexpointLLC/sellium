@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Headset, Question, Plus, Code } from "phosphor-react"
+import { Headset, Question, Plus, Code, CaretDown, CaretUp } from "phosphor-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -133,6 +133,10 @@ export default function SupportPage() {
     priority: "medium" as "low" | "medium" | "high" | "urgent",
     category: ""
   })
+  
+  // FAQ expanded state
+  const [isFaqSectionOpen, setIsFaqSectionOpen] = useState(false)
+  const [expandedFaqIndex, setExpandedFaqIndex] = useState<number | null>(null)
 
   async function fetchTickets(storeId: string) {
     setLoadingTickets(true)
@@ -213,6 +217,39 @@ export default function SupportPage() {
       toast.success("Linquo live chat removed!")
     }
     setRemoving(false)
+  }
+
+  // Extract Linquo Organization ID from script tag if pasted
+  const extractLinquoOrgId = (input: string): string => {
+    const trimmed = input.trim()
+    
+    // Check if it's a script tag
+    if (trimmed.includes('<script') && trimmed.includes('linquo')) {
+      // Try to extract ID from src attribute (UUID pattern: 8-4-4-4-12 hex digits)
+      const idMatch = trimmed.match(/id=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i)
+      if (idMatch && idMatch[1]) {
+        return idMatch[1]
+      }
+      // Fallback: try to match any id= value
+      const fallbackMatch = trimmed.match(/id=([a-f0-9-]+)/i)
+      if (fallbackMatch && fallbackMatch[1]) {
+        return fallbackMatch[1]
+      }
+    }
+    
+    // If it's just a UUID, return it as is
+    const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
+    if (uuidPattern.test(trimmed)) {
+      return trimmed
+    }
+    
+    // Return original input if no pattern matches
+    return trimmed
+  }
+
+  const handleLinquoOrgIdChange = (value: string) => {
+    const extractedId = extractLinquoOrgId(value)
+    setLinquoOrgId(extractedId)
   }
 
   async function generateTicketNumber(storeId: string): Promise<string> {
@@ -351,7 +388,14 @@ export default function SupportPage() {
                 id="linquo-org-id"
                 placeholder="Enter your Linquo organization ID"
                 value={linquoOrgId}
-                onChange={(e) => setLinquoOrgId(e.target.value)}
+                onChange={(e) => handleLinquoOrgIdChange(e.target.value)}
+                onPaste={(e) => {
+                  e.preventDefault()
+                  const pastedText = e.clipboardData.getData('text')
+                  const extractedId = extractLinquoOrgId(pastedText)
+                  setLinquoOrgId(extractedId)
+                  toast.success("Organization ID extracted from script tag")
+                }}
                 disabled={loading || !!savedLinquoOrgId}
                 className="max-w-md"
               />
@@ -375,7 +419,7 @@ export default function SupportPage() {
             <p className="text-xs text-muted-foreground">
               Get your organization ID from your{" "}
               <a 
-                href="https://admin.linquo.app" 
+                href="https://admin.linquo.app/dashboard?tab=embed" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-blue-500 hover:underline"
@@ -497,22 +541,47 @@ export default function SupportPage() {
 
       {/* FAQ Section */}
       <div className="rounded-lg border bg-card">
-        <div className="border-b px-6 py-4">
+        <button
+          onClick={() => setIsFaqSectionOpen(!isFaqSectionOpen)}
+          className="w-full border-b px-6 py-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
+        >
           <h2 className="text-lg font-semibold">Frequently Asked Questions</h2>
-        </div>
-        <div className="divide-y">
-          {faqItems.map((item, index) => (
-            <div key={index} className="px-6 py-4">
-              <div className="flex items-start gap-3">
-                <Question className="mt-0.5 h-5 w-5 text-muted-foreground" />
-                <div>
-                  <h3 className="font-medium">{item.question}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{item.answer}</p>
+          {isFaqSectionOpen ? (
+            <CaretUp className="h-5 w-5 text-muted-foreground" />
+          ) : (
+            <CaretDown className="h-5 w-5 text-muted-foreground" />
+          )}
+        </button>
+        {isFaqSectionOpen && (
+          <div className="divide-y">
+            {faqItems.map((item, index) => {
+              const isExpanded = expandedFaqIndex === index
+              return (
+                <div key={index} className="px-3 py-4">
+                  <button
+                    onClick={() => setExpandedFaqIndex(isExpanded ? null : index)}
+                    className="w-full flex items-start gap-3 text-left hover:bg-muted/50 py-2 px-3 rounded-md transition-colors"
+                  >
+                    <Question className="mt-0.5 h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-medium">{item.question}</h3>
+                        {isExpanded ? (
+                          <CaretUp className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        ) : (
+                          <CaretDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        )}
+                      </div>
+                      {isExpanded && (
+                        <p className="mt-2 text-sm text-muted-foreground">{item.answer}</p>
+                      )}
+                    </div>
+                  </button>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* New Ticket Dialog */}

@@ -16,6 +16,10 @@ import {
   Headset,
   Stack,
   User,
+  Shield,
+  CreditCard,
+  Circle,
+  CheckCircle,
 } from "phosphor-react"
 
 import {
@@ -35,7 +39,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Logo } from "@/components/logo"
@@ -126,6 +129,7 @@ export function DashboardSidebar() {
     avatar_url: string | null
   } | null>(null)
   const [storeUsername, setStoreUsername] = useState<string | null>(null)
+  const [storePlan, setStorePlan] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   
   const isCollapsed = state === "collapsed"
@@ -150,15 +154,16 @@ export function DashboardSidebar() {
         })
       }
 
-      // Fetch store username
+      // Fetch store username and plan
       const { data: store } = await supabase
         .from("stores")
-        .select("username")
+        .select("username, plan")
         .eq("user_id", user.id)
         .single()
 
       if (store) {
         setStoreUsername(store.username)
+        setStorePlan(store.plan || "free")
       }
 
       setLoading(false)
@@ -183,13 +188,13 @@ export function DashboardSidebar() {
   }
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="!flex !flex-row h-16 border-b px-4 items-center justify-start group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center">
+    <Sidebar collapsible="icon" className="!border-r-0 bg-muted/30 dark:bg-muted/15">
+      <SidebarHeader className="!flex !flex-row h-16 border-b px-4 items-center justify-start group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center bg-muted/30 dark:bg-muted/15">
         <Link href="/dashboard" className="flex items-center group-data-[collapsible=icon]:hidden">
           <Logo className="h-7 w-auto" />
         </Link>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="bg-muted/30 dark:bg-muted/15">
         {menuGroups.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
@@ -214,7 +219,7 @@ export function DashboardSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="border-t p-2">
+      <SidebarFooter className="border-t p-2 bg-muted/30 dark:bg-muted/15">
         {loading ? (
           <div className="flex items-center gap-3 px-2 py-2">
             <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
@@ -245,27 +250,71 @@ export function DashboardSidebar() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <div className="px-2 py-1.5">
-                <div className="font-medium text-sm">
-                  {userProfile?.name || "User"}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {storeUsername || "No store"}
+            <DropdownMenuContent align="end" className="w-64 p-0 ml-2 border-0 bg-muted/50 shadow-lg">
+              {/* User Profile Section */}
+              <div className="px-4 py-3 border-b">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-12 w-12 flex-shrink-0">
+                    <AvatarImage src={userProfile?.avatar_url || undefined} alt={userProfile?.name || "User"} />
+                    <AvatarFallback className="bg-primary/10 text-primary">
+                      {userProfile?.name ? getInitials(userProfile.name) : <User className="h-6 w-6" />}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-sm truncate">
+                        {userProfile?.name || "User"}
+                      </h3>
+                      {storePlan && storePlan !== "free" && (
+                        <span className="px-2 py-0.5 text-[10px] font-semibold bg-yellow-500/20 text-yellow-600 dark:text-yellow-500 rounded border border-yellow-500/30">
+                          {storePlan.charAt(0).toUpperCase() + storePlan.slice(1)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {storePlan ? `${storePlan.charAt(0).toUpperCase() + storePlan.slice(1)} Plan` : "Free Plan"} • {storeUsername || "No store"}
+                    </p>
+                  </div>
                 </div>
               </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings" className="cursor-pointer">
-                  <Gear className="mr-2 h-4 w-4" />
-                  Settings
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive">
-                <SignOut className="mr-2 h-4 w-4" />
-                Sign Out
-              </DropdownMenuItem>
+
+              {/* Site Status Section */}
+              <div className="px-4 py-2.5 border-b flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Site Status</span>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-500/10 border border-green-500/20">
+                  <Circle className="h-2 w-2 fill-green-500 text-green-500" weight="fill" />
+                  <span className="text-xs font-medium text-green-600 dark:text-green-500">Online</span>
+                </div>
+              </div>
+
+              {/* Menu Items */}
+              <div className="p-1.5">
+                <DropdownMenuItem asChild className="rounded-md px-2 py-2">
+                  <Link href="/dashboard/settings" className="cursor-pointer flex items-center">
+                    <Gear className="mr-2.5 h-4 w-4" />
+                    <span>General Settings</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-md px-2 py-2">
+                  <Link href="/dashboard/settings?tab=billing" className="cursor-pointer flex items-center">
+                    <CreditCard className="mr-2.5 h-4 w-4" />
+                    <span>Billing</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-md px-2 py-2">
+                  <Link href="/dashboard/settings?tab=security" className="cursor-pointer flex items-center">
+                    <Shield className="mr-2.5 h-4 w-4" />
+                    <span>Security</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={handleSignOut} 
+                  className="cursor-pointer text-destructive focus:text-destructive rounded-md px-2 py-2 mt-1"
+                >
+                  <SignOut className="mr-2.5 h-4 w-4" />
+                  <span>Logout</span>
+                </DropdownMenuItem>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
