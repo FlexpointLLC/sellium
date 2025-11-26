@@ -193,8 +193,8 @@ export default function EarningsPage() {
   const isPositiveGrowth = earningsData.thisMonth >= earningsData.lastMonth
 
   if (loading) {
-    return (
-      <div className="mx-auto max-w-6xl flex flex-col gap-6">
+      return (
+        <div className="mx-auto max-w-6xl flex flex-col gap-6">
         <div>
           <Skeleton className="h-7 w-32 mb-2" />
           <Skeleton className="h-4 w-48" />
@@ -218,7 +218,7 @@ export default function EarningsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border bg-card p-4 text-card-foreground shadow-sm">
+        <div className="rounded-xl border border-border/50 bg-card p-4 text-card-foreground shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium">Total Earnings</h3>
             <CurrencyDollar className="h-5 w-5 text-muted-foreground" />
@@ -227,7 +227,7 @@ export default function EarningsPage() {
           <p className="text-xs text-muted-foreground">Lifetime earnings</p>
         </div>
 
-        <div className="rounded-lg border bg-card p-4 text-card-foreground shadow-sm">
+        <div className="rounded-xl border border-border/50 bg-card p-4 text-card-foreground shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium">This Month</h3>
             <Calendar className="h-5 w-5 text-muted-foreground" />
@@ -249,7 +249,7 @@ export default function EarningsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border bg-card p-4 text-card-foreground shadow-sm">
+        <div className="rounded-xl border border-border/50 bg-card p-4 text-card-foreground shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium">Last Month</h3>
             <Calendar className="h-5 w-5 text-muted-foreground" />
@@ -258,7 +258,7 @@ export default function EarningsPage() {
           <p className="text-xs text-muted-foreground">Previous month total</p>
         </div>
 
-        <div className="rounded-lg border bg-card p-4 text-card-foreground shadow-sm">
+        <div className="rounded-xl border border-border/50 bg-card p-4 text-card-foreground shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium">Pending Payout</h3>
             <CurrencyDollar className="h-5 w-5 text-muted-foreground" />
@@ -269,7 +269,7 @@ export default function EarningsPage() {
       </div>
 
       {/* Recent Transactions */}
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-xl border border-border/50 bg-card">
         <div className="flex items-center justify-between border-b px-6 py-4">
           <h2 className="text-lg font-semibold">Recent Transactions</h2>
         </div>
@@ -339,7 +339,7 @@ export default function EarningsPage() {
 
       {/* Quick Stats from Orders */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-xl border border-border/50 bg-card p-4">
           <h3 className="text-sm font-medium text-muted-foreground">Average Order Value</h3>
           <p className="text-2xl font-bold mt-1">
             {transactions.filter(t => t.type === "sale").length > 0
@@ -353,13 +353,13 @@ export default function EarningsPage() {
             }
           </p>
         </div>
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-xl border border-border/50 bg-card p-4">
           <h3 className="text-sm font-medium text-muted-foreground">Total Fees Paid</h3>
           <p className="text-2xl font-bold mt-1">
             {formatCurrency(transactions.reduce((sum, t) => sum + t.fee, 0))}
           </p>
         </div>
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-xl border border-border/50 bg-card p-4">
           <h3 className="text-sm font-medium text-muted-foreground">Transactions This Month</h3>
           <p className="text-2xl font-bold mt-1">
             {transactions.filter(t => {

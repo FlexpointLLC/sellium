@@ -378,10 +378,10 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card overflow-x-auto">
+      <div className="rounded-xl border border-border/50 bg-card overflow-x-auto">
         <table className="w-full min-w-[750px]">
           <thead>
-            <tr className="border-b">
+            <tr className="border-b border-border/50">
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Customer</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Email</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Orders</th>
@@ -411,7 +411,7 @@ export default function CustomersPage() {
               </tr>
             ) : (
               filteredCustomers.map((customer) => (
-                <tr key={customer.id} className="border-b last:border-0">
+                <tr key={customer.id} className="border-b border-border/50 last:border-0">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">

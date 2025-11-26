@@ -256,7 +256,7 @@ export default function DashboardPage() {
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row gap-6">
             {/* Store Preview Thumbnail */}
-            <div className="w-full md:w-48 h-[103px] rounded-lg overflow-hidden border bg-muted flex-shrink-0 relative group">
+            <div className="w-full md:w-48 h-[103px] rounded-lg overflow-hidden border border-border/50 bg-muted flex-shrink-0 relative group">
               <iframe
                 src={storefrontUrl}
                 className="absolute top-0 left-0 w-[400%] h-[412px] origin-top-left scale-[0.25] pointer-events-none"

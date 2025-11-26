@@ -16,10 +16,7 @@ import {
   Headset,
   Stack,
   User,
-  Shield,
-  CreditCard,
   Circle,
-  CheckCircle,
 } from "phosphor-react"
 
 import {
@@ -188,13 +185,13 @@ export function DashboardSidebar() {
   }
 
   return (
-    <Sidebar collapsible="icon" className="!border-r-0 bg-muted/30 dark:bg-muted/15">
-      <SidebarHeader className="!flex !flex-row h-16 border-b px-4 items-center justify-start group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center bg-muted/30 dark:bg-muted/15">
+    <Sidebar collapsible="icon" className="!border-r-0">
+      <SidebarHeader className="!flex !flex-row h-16 border-b border-border/50 px-4 items-center justify-start group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center">
         <Link href="/dashboard" className="flex items-center group-data-[collapsible=icon]:hidden">
           <Logo className="h-7 w-auto" />
         </Link>
       </SidebarHeader>
-      <SidebarContent className="bg-muted/30 dark:bg-muted/15">
+      <SidebarContent>
         {menuGroups.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
@@ -219,7 +216,7 @@ export function DashboardSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="border-t p-2 bg-muted/30 dark:bg-muted/15">
+      <SidebarFooter className="p-2">
         {loading ? (
           <div className="flex items-center gap-3 px-2 py-2">
             <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
@@ -231,7 +228,7 @@ export function DashboardSidebar() {
         ) : (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className={`w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-muted transition-colors ${isCollapsed ? "justify-center" : ""}`}>
+              <button className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg bg-muted/15 hover:bg-muted transition-colors ${isCollapsed ? "justify-center" : ""}`}>
                 <Avatar className="h-10 w-10 flex-shrink-0">
                   <AvatarImage src={userProfile?.avatar_url || undefined} alt={userProfile?.name || "User"} />
                   <AvatarFallback className="bg-primary/10 text-primary">
@@ -290,21 +287,21 @@ export function DashboardSidebar() {
               {/* Menu Items */}
               <div className="p-1.5">
                 <DropdownMenuItem asChild className="rounded-md px-2 py-2">
-                  <Link href="/dashboard/settings" className="cursor-pointer flex items-center">
+                  <Link href="/dashboard/settings?tab=store" className="cursor-pointer flex items-center">
+                    <Storefront className="mr-2.5 h-4 w-4" />
+                    <span>Store</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-md px-2 py-2">
+                  <Link href="/dashboard/settings?tab=profile" className="cursor-pointer flex items-center">
+                    <User className="mr-2.5 h-4 w-4" />
+                    <span>Profile</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-md px-2 py-2">
+                  <Link href="/dashboard/settings?tab=custom_domain" className="cursor-pointer flex items-center">
                     <Gear className="mr-2.5 h-4 w-4" />
-                    <span>General Settings</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="rounded-md px-2 py-2">
-                  <Link href="/dashboard/settings?tab=billing" className="cursor-pointer flex items-center">
-                    <CreditCard className="mr-2.5 h-4 w-4" />
-                    <span>Billing</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="rounded-md px-2 py-2">
-                  <Link href="/dashboard/settings?tab=security" className="cursor-pointer flex items-center">
-                    <Shield className="mr-2.5 h-4 w-4" />
-                    <span>Security</span>
+                    <span>Custom Domain</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem 

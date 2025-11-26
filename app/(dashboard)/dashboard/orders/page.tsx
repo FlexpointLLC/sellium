@@ -406,10 +406,10 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card overflow-x-auto">
+      <div className="rounded-xl border border-border/50 bg-card overflow-x-auto">
         <table className="w-full min-w-[800px]">
           <thead>
-            <tr className="border-b">
+            <tr className="border-b border-border/50">
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Order</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Customer</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Items</th>
@@ -434,7 +434,7 @@ export default function OrdersPage() {
               </tr>
             ) : (
               filteredOrders.map((order) => (
-                <tr key={order.id} className="border-b last:border-0">
+                <tr key={order.id} className="border-b border-border/50 last:border-0">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
@@ -674,7 +674,7 @@ export default function OrdersPage() {
                 </h3>
                 <div className="space-y-3">
                   {selectedOrder.items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 py-2 border-b last:border-0">
+                    <div key={item.id} className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0">
                       <div className="h-14 w-14 rounded-lg bg-muted overflow-hidden flex-shrink-0">
                         {item.image_url ? (
                           <img 

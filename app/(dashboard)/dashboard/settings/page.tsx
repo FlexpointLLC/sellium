@@ -926,7 +926,7 @@ function SettingsPageContent() {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? "bg-muted"
                     : "text-muted-foreground hover:bg-muted"
@@ -943,7 +943,7 @@ function SettingsPageContent() {
         <div className="lg:col-span-3">
           {/* Store Tab */}
           {activeTab === "store" && (
-            <div className="rounded-lg border bg-card p-6">
+            <div className="rounded-lg border border-border/50 bg-card p-6">
               <div className="mb-6">
                 <h2 className="text-lg font-semibold">Store Settings</h2>
                 <p className="text-sm text-muted-foreground">Customize your store appearance and information</p>
@@ -956,7 +956,7 @@ function SettingsPageContent() {
                   <div className="space-y-2">
                     <Label>Store Logo</Label>
                     <div className="flex items-center gap-4">
-                      <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border group">
+                      <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border border-border/50 group">
                         {store.logo_url ? (
                           <>
                             <img src={store.logo_url} alt="Logo" className="h-full w-full object-cover" />
@@ -1000,7 +1000,7 @@ function SettingsPageContent() {
                   <div className="space-y-2">
                     <Label>Store Favicon</Label>
                     <div className="flex items-center gap-4">
-                      <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border group">
+                      <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border border-border/50 group">
                         {store.favicon_url ? (
                           <>
                             <img src={store.favicon_url} alt="Favicon" className="h-full w-full object-cover" />
@@ -1051,7 +1051,7 @@ function SettingsPageContent() {
                   {/* Banner Grid */}
                   <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                     {store.banner_images.map((banner, index) => (
-                      <div key={index} className="relative group aspect-[16/5] rounded-lg overflow-hidden border bg-muted">
+                      <div key={index} className="relative group aspect-[16/5] rounded-lg overflow-hidden border border-border/50 bg-muted">
                         <img src={banner} alt={`Banner ${index + 1}`} className="h-full w-full object-cover" />
                         <button
                           onClick={() => removeBanner(index)}
@@ -1296,7 +1296,7 @@ function SettingsPageContent() {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-4 pt-4 border-t">
+                <div className="flex justify-end gap-4 pt-4 border-t border-border/50">
                   <Button variant="outline" size="sm">Cancel</Button>
                   <Button size="sm" onClick={handleSaveStore} disabled={saving}>
                     {saving ? "Saving..." : "Save Changes"}
@@ -1308,7 +1308,7 @@ function SettingsPageContent() {
 
           {/* Profile Tab */}
           {activeTab === "profile" && (
-            <div className="rounded-lg border bg-card p-6">
+            <div className="rounded-lg border border-border/50 bg-card p-6">
               <div className="mb-6">
                 <h2 className="text-lg font-semibold">Profile Settings</h2>
                 <p className="text-sm text-muted-foreground">Update your personal information</p>
@@ -1317,7 +1317,7 @@ function SettingsPageContent() {
               <div className="space-y-6">
                 {/* Avatar */}
                 <div className="flex items-center gap-6">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted overflow-hidden border">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted overflow-hidden border border-border/50">
                     {profile.avatar_url ? (
                       <img src={profile.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
                     ) : (
@@ -1391,7 +1391,7 @@ function SettingsPageContent() {
                   />
                 </div>
 
-                <div className="flex justify-end gap-4 pt-4 border-t">
+                <div className="flex justify-end gap-4 pt-4 border-t border-border/50">
                   <Button variant="outline" size="sm">Cancel</Button>
                   <Button size="sm" onClick={handleSaveProfile} disabled={saving}>
                     {saving ? "Saving..." : "Save Changes"}
@@ -1403,7 +1403,7 @@ function SettingsPageContent() {
 
           {/* Custom Domain Tab */}
           {activeTab === "domain" && (
-            <div className="rounded-lg border bg-card p-6">
+            <div className="rounded-lg border border-border/50 bg-card p-6">
               <div className="mb-6">
                 <h2 className="text-lg font-semibold">Custom Domain</h2>
                 <p className="text-sm text-muted-foreground">Connect your own domain to your store using Vercel DNS</p>
@@ -1413,7 +1413,7 @@ function SettingsPageContent() {
                 {/* Current Domain Status */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Default Domain</h3>
-                  <div className="p-4 border rounded-lg bg-muted/50">
+                  <div className="p-4 border border-border/50 rounded-lg bg-muted/50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Globe className="h-5 w-5 text-muted-foreground" />
@@ -1431,7 +1431,7 @@ function SettingsPageContent() {
                 </div>
 
                 {/* Add Custom Domain */}
-                <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-4 pt-4 border-t border-border/50">
                   <h3 className="text-sm font-medium">Custom Domain</h3>
                   <p className="text-sm text-muted-foreground">
                     Use your own domain (e.g., shop.yourbrand.com) instead of the default Sellium subdomain.
@@ -1472,7 +1472,7 @@ function SettingsPageContent() {
 
                     {/* Domain Status */}
                     {customDomain.status !== "not_configured" && (
-                      <div className="p-4 border rounded-lg">
+                      <div className="p-4 border border-border/50 rounded-lg">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
                             <LinkIcon className="h-5 w-5 text-muted-foreground" />
@@ -1787,10 +1787,10 @@ function SettingsPageContent() {
                 </div>
 
                 {/* Help Section */}
-                <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-4 pt-4 border-t border-border/50">
                   <h3 className="text-sm font-medium">DNS Configuration Help</h3>
                   <div className="grid gap-3 md:grid-cols-2">
-                    <div className="p-4 border rounded-lg">
+                    <div className="p-4 border border-border/50 rounded-lg">
                       <p className="text-sm font-medium mb-1">Popular DNS Providers</p>
                       <ul className="text-xs text-muted-foreground space-y-1 mt-2">
                         <li>• Cloudflare - DNS settings → Add record</li>
@@ -1799,7 +1799,7 @@ function SettingsPageContent() {
                         <li>• Google Domains - DNS → Custom records</li>
                       </ul>
                     </div>
-                    <div className="p-4 border rounded-lg">
+                    <div className="p-4 border border-border/50 rounded-lg">
                       <p className="text-sm font-medium mb-1">Troubleshooting</p>
                       <ul className="text-xs text-muted-foreground space-y-1 mt-2">
                         <li>• DNS changes can take up to 48 hours</li>
@@ -1816,7 +1816,7 @@ function SettingsPageContent() {
 
           {/* Notifications Tab */}
           {activeTab === "notifications" && (
-            <div className="rounded-lg border bg-card p-6">
+            <div className="rounded-lg border border-border/50 bg-card p-6">
               <div className="mb-6">
                 <h2 className="text-lg font-semibold">Notification Settings</h2>
                 <p className="text-sm text-muted-foreground">Choose how you want to be notified</p>
@@ -1871,7 +1871,7 @@ function SettingsPageContent() {
                 </div>
 
                 {/* Push Notifications */}
-                <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-4 pt-4 border-t border-border/50">
                   <h3 className="text-sm font-medium">Push Notifications</h3>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -1907,7 +1907,7 @@ function SettingsPageContent() {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-4 pt-4 border-t">
+                <div className="flex justify-end gap-4 pt-4 border-t border-border/50">
                   <Button variant="outline" size="sm">Cancel</Button>
                   <Button size="sm" onClick={handleSaveNotifications} disabled={saving}>
                     {saving ? "Saving..." : "Save Changes"}
@@ -1919,7 +1919,7 @@ function SettingsPageContent() {
 
           {/* Payments Tab */}
           {activeTab === "payments" && (
-            <div className="rounded-lg border bg-card p-6">
+            <div className="rounded-lg border border-border/50 bg-card p-6">
               <div className="mb-6">
                 <h2 className="text-lg font-semibold">Payment Settings</h2>
                 <p className="text-sm text-muted-foreground">Manage your payment methods and payout settings</p>
@@ -1930,7 +1930,7 @@ function SettingsPageContent() {
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Accepted Payment Methods</h3>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded bg-green-500/10 flex items-center justify-center">
                           <span className="text-green-600 font-bold text-sm">bK</span>
@@ -1942,7 +1942,7 @@ function SettingsPageContent() {
                       </div>
                       <Switch defaultChecked />
                     </div>
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded bg-orange-500/10 flex items-center justify-center">
                           <span className="text-orange-600 font-bold text-sm">Ng</span>
@@ -1954,7 +1954,7 @@ function SettingsPageContent() {
                       </div>
                       <Switch defaultChecked />
                     </div>
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded bg-blue-500/10 flex items-center justify-center">
                           <CreditCard className="h-5 w-5 text-blue-600" />
@@ -1966,7 +1966,7 @@ function SettingsPageContent() {
                       </div>
                       <Switch />
                     </div>
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded bg-gray-500/10 flex items-center justify-center">
                           <span className="text-gray-600 font-bold text-sm">COD</span>
@@ -1982,7 +1982,7 @@ function SettingsPageContent() {
                 </div>
 
                 {/* Payout Settings */}
-                <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-4 pt-4 border-t border-border/50">
                   <h3 className="text-sm font-medium">Payout Settings</h3>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
@@ -2009,7 +2009,7 @@ function SettingsPageContent() {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-4 pt-4 border-t">
+                <div className="flex justify-end gap-4 pt-4 border-t border-border/50">
                   <Button variant="outline" size="sm">Cancel</Button>
                   <Button size="sm" disabled={saving}>
                     {saving ? "Saving..." : "Save Changes"}
@@ -2021,7 +2021,7 @@ function SettingsPageContent() {
 
           {/* Security Tab */}
           {activeTab === "security" && (
-            <div className="rounded-lg border bg-card p-6">
+            <div className="rounded-lg border border-border/50 bg-card p-6">
               <div className="mb-6">
                 <h2 className="text-lg font-semibold">Security Settings</h2>
                 <p className="text-sm text-muted-foreground">Manage your account security</p>
@@ -2044,10 +2044,10 @@ function SettingsPageContent() {
                 </div>
 
                 {/* Active Sessions */}
-                <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-4 pt-4 border-t border-border/50">
                   <h3 className="text-sm font-medium">Active Sessions</h3>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded bg-muted flex items-center justify-center">
                           <Globe className="h-5 w-5" />
@@ -2074,7 +2074,7 @@ function SettingsPageContent() {
                 </div>
 
                 {/* Danger Zone */}
-                <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-4 pt-4 border-t border-border/50">
                   <h3 className="text-sm font-medium text-destructive">Danger Zone</h3>
                   <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
                     <div>

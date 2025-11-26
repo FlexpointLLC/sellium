@@ -311,17 +311,17 @@ export default function VariantsPage() {
       </div>
 
       {/* Info Card */}
-      <div className="rounded-lg border bg-muted/30 p-4">
+      <div className="rounded-lg border border-border/50 bg-muted/30 p-4">
         <p className="text-sm text-muted-foreground">
           <strong>Tip:</strong> Create variant templates here (like Size, Color, Material) with predefined values. 
           When adding products, you can quickly select from these templates instead of typing them manually each time.
         </p>
       </div>
 
-      <div className="rounded-lg border bg-card overflow-x-auto">
+      <div className="rounded-lg border border-border/50 bg-card overflow-x-auto">
         <table className="w-full min-w-[500px]">
           <thead>
-            <tr className="border-b">
+            <tr className="border-b border-border/50">
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Variant Name</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Options</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground w-24">Actions</th>
@@ -351,7 +351,7 @@ export default function VariantsPage() {
               </tr>
             ) : (
               filteredVariants.map((variant) => (
-                <tr key={variant.id} className="border-b last:border-0">
+                <tr key={variant.id} className="border-b border-border/50 last:border-0">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">

@@ -368,8 +368,8 @@ export default function SupportPage() {
       </div>
 
       {/* Linquo Live Chat Integration */}
-      <div className="rounded-lg border bg-card">
-        <div className="border-b px-6 py-4">
+      <div className="rounded-lg border border-border/50 bg-card">
+        <div className="border-b border-border/50 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
               <Code className="h-5 w-5 text-blue-500" />
@@ -442,11 +442,11 @@ export default function SupportPage() {
 
 
       {/* Support Tickets */}
-      <div className="rounded-lg border bg-card">
-        <div className="border-b px-6 py-4">
+      <div className="rounded-lg border border-border/50 bg-card">
+        <div className="border-b border-border/50 px-6 py-4">
           <h2 className="text-lg font-semibold">Your Tickets</h2>
         </div>
-        <div className="grid grid-cols-5 gap-4 border-b px-6 py-3 text-sm font-medium text-muted-foreground">
+        <div className="grid grid-cols-5 gap-4 border-b border-border/50 px-6 py-3 text-sm font-medium text-muted-foreground">
           <div>Ticket ID</div>
           <div>Subject</div>
           <div>Status</div>
@@ -461,7 +461,7 @@ export default function SupportPage() {
           tickets.map((ticket) => (
             <div
               key={ticket.id}
-              className="grid grid-cols-5 gap-4 border-b px-6 py-4 last:border-0 hover:bg-muted/50"
+              className="grid grid-cols-5 gap-4 border-b border-border/50 px-6 py-4 last:border-0 hover:bg-muted/50"
             >
               <div 
                 className="flex items-center gap-3 cursor-pointer"
@@ -540,10 +540,10 @@ export default function SupportPage() {
       </div>
 
       {/* FAQ Section */}
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-lg border border-border/50 bg-card">
         <button
           onClick={() => setIsFaqSectionOpen(!isFaqSectionOpen)}
-          className="w-full border-b px-6 py-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
+          className="w-full border-b border-border/50 px-6 py-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
         >
           <h2 className="text-lg font-semibold">Frequently Asked Questions</h2>
           {isFaqSectionOpen ? (
@@ -717,7 +717,7 @@ export default function SupportPage() {
                 <p className="mt-1 text-sm whitespace-pre-wrap">{selectedTicket.description}</p>
               </div>
               {selectedTicket.admin_response && (
-                <div className="rounded-lg border bg-muted/50 p-4">
+                <div className="rounded-lg border border-border/50 bg-muted/50 p-4">
                   <Label className="text-xs text-muted-foreground">Admin Response</Label>
                   <p className="mt-1 text-sm whitespace-pre-wrap">{selectedTicket.admin_response}</p>
                 </div>

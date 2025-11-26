@@ -746,7 +746,7 @@ export default function CategoriesPage() {
       <>
         <tr 
           data-category-id={category.id}
-          className={`border-b last:border-0 transition-all select-none ${getRowStyle()}`}
+          className={`border-b border-border/50 last:border-0 transition-all select-none ${getRowStyle()}`}
           draggable="true"
           onDragStart={(e) => handleDragStart(e, category)}
           onDragEnd={handleDragEnd}
@@ -896,7 +896,7 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="rounded-lg border border-border/50 bg-card overflow-hidden">
         {/* Root drop zone */}
         {isDragging && draggedCategoryRef.current?.parent_id && (
           <div 
@@ -911,7 +911,7 @@ export default function CategoriesPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[650px]">
             <thead>
-              <tr className="border-b bg-muted/30">
+              <tr className="border-b border-border/50 bg-muted/30">
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Name</th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">URL Path</th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">Products</th>
