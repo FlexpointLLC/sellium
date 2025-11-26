@@ -222,10 +222,11 @@ export default function DashboardPage() {
     )
   }
 
-  // Use custom domain if verified, otherwise use default my.sellium.store/username
-  const storefrontUrl = customDomain?.status === 'verified'
+  // Use custom domain if verified (only in production), otherwise use default
+  const isProduction = process.env.NODE_ENV === 'production'
+  const storefrontUrl = isProduction && customDomain?.status === 'verified'
     ? `https://${customDomain.domain}`
-    : process.env.NODE_ENV === 'production' 
+    : isProduction 
       ? `https://my.sellium.store/${store.username}`
       : `http://localhost:3000/${store.username}`
   const planInfo = planLimits[store.plan] || planLimits.free
