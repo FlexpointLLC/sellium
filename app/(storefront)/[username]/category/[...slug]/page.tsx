@@ -63,6 +63,7 @@ interface Store {
   meta_title: string | null
   meta_description: string | null
   description: string | null
+  linquo_org_id?: string | null
   social_links?: {
     phone?: string
     whatsapp?: string
@@ -151,7 +152,7 @@ function CategoryContent({
     // Fetch store
     const { data: storeData, error: storeError } = await supabase
       .from("stores")
-      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description")
+      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description, linquo_org_id")
       .eq("username", params.username)
       .single()
 

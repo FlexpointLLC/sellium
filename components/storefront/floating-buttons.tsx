@@ -71,7 +71,7 @@ export function FloatingButtons({ username, themeColor, whatsappNumber, currency
   return (
     <>
       {/* Floating Cart Button & Panel */}
-      <div ref={panelRef} className="fixed bottom-6 right-6 z-50">
+      <div ref={panelRef} className="fixed bottom-24 right-6 z-50">
         {/* Expanded Cart Panel */}
         {isExpanded && (
           <div 

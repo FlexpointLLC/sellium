@@ -259,6 +259,7 @@ CREATE TABLE IF NOT EXISTS public.stores (
   timezone TEXT DEFAULT 'UTC',
   address JSONB,
   social_links JSONB,
+  linquo_org_id TEXT,
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
   plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'starter', 'pro', 'enterprise')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -558,6 +559,26 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 
 -- ============================================
+-- SUPPORT_TICKETS TABLE
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.support_tickets (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  store_id UUID REFERENCES public.stores(id) ON DELETE CASCADE NOT NULL,
+  ticket_number TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  description TEXT NOT NULL,
+  priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
+  status TEXT DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+  category TEXT,
+  attachments TEXT[] DEFAULT '{}',
+  admin_response TEXT,
+  resolved_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(store_id, ticket_number)
+);
+
+-- ============================================
 -- CUSTOM_DOMAINS TABLE
 -- ============================================
 CREATE TABLE IF NOT EXISTS public.custom_domains (
@@ -619,6 +640,7 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.variants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_variants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
@@ -830,6 +852,16 @@ CREATE POLICY "Users can view their own notifications" ON public.notifications
 
 CREATE POLICY "Users can update their own notifications" ON public.notifications
   FOR UPDATE USING (auth.uid() = user_id);
+
+-- Support tickets policies
+CREATE POLICY "Store owners can manage their support tickets" ON public.support_tickets
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.stores
+      WHERE stores.id = support_tickets.store_id
+      AND stores.user_id = auth.uid()
+    )
+  );
 
 -- Store settings policies
 CREATE POLICY "Store owners can manage store settings" ON public.store_settings
@@ -1076,3 +1108,9 @@ CREATE INDEX IF NOT EXISTS idx_reviews_rating ON public.reviews(rating);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_store_id ON public.notifications(store_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_read_at ON public.notifications(read_at);
+
+-- Support tickets indexes
+CREATE INDEX IF NOT EXISTS idx_support_tickets_store_id ON public.support_tickets(store_id);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_ticket_number ON public.support_tickets(ticket_number);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON public.support_tickets(status);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_created_at ON public.support_tickets(created_at);

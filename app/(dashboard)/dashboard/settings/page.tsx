@@ -9,6 +9,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 
@@ -132,9 +142,12 @@ function SettingsPageContent() {
   
   // Security settings
   const [security, setSecurity] = useState({
-    two_factor_enabled: false,
     login_alerts: true
   })
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
 
   // Custom domain settings
   const [customDomain, setCustomDomain] = useState<{
@@ -632,15 +645,90 @@ function SettingsPageContent() {
     setSaving(false)
   }
 
-  async function handleChangePassword() {
-    const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/dashboard/settings`
-    })
+  // Sign out all other sessions
+  async function handleSignOutAllSessions() {
+    setIsSigningOut(true)
+    try {
+      // Sign out from all devices except current
+      const { error } = await supabase.auth.signOut({ scope: 'others' })
+      
+      if (error) {
+        toast.error("Failed to sign out other sessions")
+      } else {
+        toast.success("Successfully signed out of all other sessions")
+      }
+    } catch (error) {
+      toast.error("An error occurred while signing out")
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
 
-    if (error) {
-      toast.error("Failed to send password reset email")
-    } else {
-      toast.success("Password reset email sent!")
+  // Delete account and all associated data
+  async function handleDeleteAccount() {
+    if (deleteConfirmText !== "DELETE") {
+      toast.error("Please type DELETE to confirm")
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      // Delete store data (this will cascade delete products, orders, etc.)
+      if (storeId) {
+        // Delete custom domain first if exists
+        const { data: domainData } = await supabase
+          .from("custom_domains")
+          .select("domain")
+          .eq("store_id", storeId)
+          .single()
+
+        if (domainData?.domain) {
+          // Remove domain from Vercel
+          try {
+            await fetch(`/api/domains?domain=${domainData.domain}`, {
+              method: "DELETE"
+            })
+          } catch (e) {
+            // Continue even if Vercel deletion fails
+            console.error("Failed to remove domain from Vercel:", e)
+          }
+        }
+
+        // Delete the store (cascade will handle related data)
+        const { error: storeError } = await supabase
+          .from("stores")
+          .delete()
+          .eq("id", storeId)
+
+        if (storeError) {
+          throw new Error("Failed to delete store data")
+        }
+      }
+
+      // Delete the user's profile
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .delete()
+          .eq("id", user.id)
+
+        if (profileError) {
+          console.error("Failed to delete profile:", profileError)
+        }
+      }
+
+      // Sign out and redirect
+      await supabase.auth.signOut()
+      toast.success("Account deleted successfully")
+      router.push("/")
+    } catch (error) {
+      console.error("Error deleting account:", error)
+      toast.error("Failed to delete account. Please try again.")
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteDialog(false)
+      setDeleteConfirmText("")
     }
   }
 
@@ -1940,37 +2028,8 @@ function SettingsPageContent() {
               </div>
 
               <div className="space-y-6">
-                {/* Password */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium">Password</h3>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">Change Password</p>
-                      <p className="text-xs text-muted-foreground">Update your password regularly for security</p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={handleChangePassword}>
-                      Change Password
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Two-Factor Authentication */}
-                <div className="space-y-4 pt-4 border-t">
-                  <h3 className="text-sm font-medium">Two-Factor Authentication</h3>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">Enable 2FA</p>
-                      <p className="text-xs text-muted-foreground">Add an extra layer of security to your account</p>
-                    </div>
-                    <Switch 
-                      checked={security.two_factor_enabled}
-                      onCheckedChange={(v) => setSecurity({ ...security, two_factor_enabled: v })}
-                    />
-                  </div>
-                </div>
-
                 {/* Login Alerts */}
-                <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-4">
                   <h3 className="text-sm font-medium">Login Alerts</h3>
                   <div className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
@@ -1995,14 +2054,22 @@ function SettingsPageContent() {
                         </div>
                         <div>
                           <p className="text-sm font-medium">Current Session</p>
-                          <p className="text-xs text-muted-foreground">Chrome on macOS • Dhaka, Bangladesh</p>
+                          <p className="text-xs text-muted-foreground">
+                            {typeof navigator !== 'undefined' ? navigator.userAgent.split(' ').slice(-2).join(' ') : 'Browser'}
+                          </p>
                         </div>
                       </div>
                       <span className="text-xs text-green-600 bg-green-500/10 px-2 py-1 rounded">Active</span>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
-                    Sign out all other sessions
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-destructive hover:text-destructive"
+                    onClick={handleSignOutAllSessions}
+                    disabled={isSigningOut}
+                  >
+                    {isSigningOut ? "Signing out..." : "Sign out all other sessions"}
                   </Button>
                 </div>
 
@@ -2014,7 +2081,11 @@ function SettingsPageContent() {
                       <p className="text-sm font-medium">Delete Account</p>
                       <p className="text-xs text-muted-foreground">Permanently delete your account and all data</p>
                     </div>
-                    <Button variant="destructive" size="sm">
+                    <Button 
+                      variant="destructive" 
+                      size="sm"
+                      onClick={() => setShowDeleteDialog(true)}
+                    >
                       Delete Account
                     </Button>
                   </div>
@@ -2022,6 +2093,51 @@ function SettingsPageContent() {
               </div>
             </div>
           )}
+
+          {/* Delete Account Confirmation Dialog */}
+          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-destructive">Delete Account</AlertDialogTitle>
+                <AlertDialogDescription className="space-y-3">
+                  <p>
+                    This action cannot be undone. This will permanently delete your account and remove all your data including:
+                  </p>
+                  <ul className="list-disc list-inside text-sm space-y-1">
+                    <li>Your store and all products</li>
+                    <li>All orders and customer data</li>
+                    <li>All categories and variants</li>
+                    <li>Your custom domain configuration</li>
+                    <li>All uploaded images and files</li>
+                  </ul>
+                  <div className="pt-2">
+                    <Label htmlFor="delete-confirm" className="text-sm font-medium">
+                      Type <span className="font-bold text-destructive">DELETE</span> to confirm
+                    </Label>
+                    <Input
+                      id="delete-confirm"
+                      className="mt-2"
+                      placeholder="Type DELETE"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    />
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setDeleteConfirmText("")}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={handleDeleteAccount}
+                  disabled={deleteConfirmText !== "DELETE" || isDeleting}
+                >
+                  {isDeleting ? "Deleting..." : "Delete Account"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </div>

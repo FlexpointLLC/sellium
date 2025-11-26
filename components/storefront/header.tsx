@@ -3,6 +3,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Script from "next/script"
 import { 
   MagnifyingGlass, 
   Phone, 
@@ -22,6 +23,7 @@ interface Store {
   social_links?: {
     phone?: string
   } | null
+  linquo_org_id?: string | null
 }
 
 interface Category {
@@ -191,6 +193,15 @@ export function StorefrontHeader({
 
   return (
     <>
+      {/* Linquo Live Chat Script */}
+      {store.linquo_org_id && (
+        <Script
+          id="linquo"
+          src={`https://admin.linquo.app/widget.js?id=${store.linquo_org_id}`}
+          strategy="afterInteractive"
+        />
+      )}
+
       {/* Top Header - Logo | Search | User */}
       <header className="sticky top-0 z-50 bg-white border-b border-black/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

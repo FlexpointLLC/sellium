@@ -35,6 +35,7 @@ interface Store {
   meta_description: string | null
   theme_color: string | null
   currency: string  // Currency code (BDT, USD, EUR, etc.)
+  linquo_org_id: string | null  // Linquo live chat organization ID
   social_links: {
     phone?: string
     whatsapp?: string
@@ -178,6 +179,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         meta_description: storeData.meta_description || null,
         theme_color: storeData.theme_color || "#000000",
         currency: storeData.currency || "BDT",
+        linquo_org_id: storeData.linquo_org_id || null,
         social_links: storeData.social_links || null,
         address: storeData.address || null
       })
