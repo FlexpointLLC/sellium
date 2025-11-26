@@ -113,6 +113,7 @@ export function QuickViewModal({
         fetchVariants(product.id)
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product])
 
   async function fetchVariants(productId: string) {

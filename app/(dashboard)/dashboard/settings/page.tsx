@@ -1,7 +1,7 @@
 "use client"
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise, Copy, Check } from "phosphor-react"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,39 @@ import { toast } from "sonner"
 
 type TabType = "store" | "profile" | "domain" | "notifications" | "payments" | "security"
 
+// Wrapper component to handle Suspense for useSearchParams
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={<SettingsPageSkeleton />}>
+      <SettingsPageContent />
+    </Suspense>
+  )
+}
+
+function SettingsPageSkeleton() {
+  return (
+    <div className="space-y-6 p-6">
+      <div className="space-y-2">
+        <div className="h-8 w-48 bg-muted animate-pulse rounded" />
+        <div className="h-4 w-72 bg-muted animate-pulse rounded" />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-4">
+        <div className="lg:col-span-1">
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="h-10 bg-muted animate-pulse rounded" />
+            ))}
+          </div>
+        </div>
+        <div className="lg:col-span-3">
+          <div className="h-96 bg-muted animate-pulse rounded" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SettingsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
