@@ -94,6 +94,12 @@ function CheckoutContent({ params }: { params: { username: string } }) {
   const [error, setError] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const { getUrl } = useStorefrontUrl(params.username)
+  const [enabledPaymentMethods, setEnabledPaymentMethods] = useState({
+    cod: true,
+    bkash: true,
+    nagad: true,
+    card: false
+  })
   
   const { items, itemCount, subtotal, clearCart } = useCart()
 
@@ -123,7 +129,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
   async function fetchStore() {
     const { data: storeData, error: storeError } = await supabase
       .from("stores")
-      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description, linquo_org_id")
+      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description, linquo_org_id, payment_settings")
       .eq("username", params.username)
       .single()
 
@@ -137,6 +143,33 @@ function CheckoutContent({ params }: { params: { username: string } }) {
       ...storeData,
       currency: storeData.currency || "BDT"
     })
+
+    // Set enabled payment methods from store settings
+    if (storeData.payment_settings) {
+      const paymentData = typeof storeData.payment_settings === 'string' 
+        ? JSON.parse(storeData.payment_settings) 
+        : storeData.payment_settings
+      
+      if (paymentData.payment_methods) {
+        setEnabledPaymentMethods({
+          cod: paymentData.payment_methods.cod ?? true,
+          bkash: paymentData.payment_methods.bkash ?? true,
+          nagad: paymentData.payment_methods.nagad ?? true,
+          card: paymentData.payment_methods.card ?? false
+        })
+
+        // Set default payment method to first enabled one
+        if (paymentData.payment_methods.cod) {
+          setFormData(prev => ({ ...prev, paymentMethod: "cod" }))
+        } else if (paymentData.payment_methods.bkash) {
+          setFormData(prev => ({ ...prev, paymentMethod: "bkash" }))
+        } else if (paymentData.payment_methods.nagad) {
+          setFormData(prev => ({ ...prev, paymentMethod: "nagad" }))
+        } else if (paymentData.payment_methods.card) {
+          setFormData(prev => ({ ...prev, paymentMethod: "card" }))
+        }
+      }
+    }
 
     // Fetch categories for navigation (include parent_id for nested dropdowns)
     const { data: categoriesData } = await supabase
@@ -624,125 +657,133 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                     Payment Method
                   </h2>
                   <div className="grid grid-cols-2 gap-4">
-                    <label 
-                      className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
-                        formData.paymentMethod === "cod" ? "border-2" : "border-gray-200"
-                      }`}
-                      style={{ borderColor: formData.paymentMethod === "cod" ? themeColor : undefined }}
-                    >
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="cod"
-                        checked={formData.paymentMethod === "cod"}
-                        onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                        className="sr-only"
-                      />
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          formData.paymentMethod === "cod" ? "" : "border-gray-300"
+                    {enabledPaymentMethods.cod && (
+                      <label 
+                        className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                          formData.paymentMethod === "cod" ? "border-2" : "border-gray-200"
                         }`}
                         style={{ borderColor: formData.paymentMethod === "cod" ? themeColor : undefined }}
                       >
-                        {formData.paymentMethod === "cod" && (
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: themeColor }} />
-                        )}
-                      </div>
-                      <div>
-                        <span className="font-medium">Cash on Delivery</span>
-                        <p className="text-xs text-gray-500">Pay when you receive</p>
-                      </div>
-                    </label>
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value="cod"
+                          checked={formData.paymentMethod === "cod"}
+                          onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                          className="sr-only"
+                        />
+                        <div 
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            formData.paymentMethod === "cod" ? "" : "border-gray-300"
+                          }`}
+                          style={{ borderColor: formData.paymentMethod === "cod" ? themeColor : undefined }}
+                        >
+                          {formData.paymentMethod === "cod" && (
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: themeColor }} />
+                          )}
+                        </div>
+                        <div>
+                          <span className="font-medium">Cash on Delivery</span>
+                          <p className="text-xs text-gray-500">Pay when you receive</p>
+                        </div>
+                      </label>
+                    )}
 
-                    <label 
-                      className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
-                        formData.paymentMethod === "bkash" ? "border-2" : "border-gray-200"
-                      }`}
-                      style={{ borderColor: formData.paymentMethod === "bkash" ? themeColor : undefined }}
-                    >
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="bkash"
-                        checked={formData.paymentMethod === "bkash"}
-                        onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                        className="sr-only"
-                      />
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          formData.paymentMethod === "bkash" ? "" : "border-gray-300"
+                    {enabledPaymentMethods.bkash && (
+                      <label 
+                        className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                          formData.paymentMethod === "bkash" ? "border-2" : "border-gray-200"
                         }`}
                         style={{ borderColor: formData.paymentMethod === "bkash" ? themeColor : undefined }}
                       >
-                        {formData.paymentMethod === "bkash" && (
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: themeColor }} />
-                        )}
-                      </div>
-                      <div>
-                        <span className="font-medium">bKash</span>
-                        <p className="text-xs text-gray-500">Mobile payment</p>
-                      </div>
-                    </label>
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value="bkash"
+                          checked={formData.paymentMethod === "bkash"}
+                          onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                          className="sr-only"
+                        />
+                        <div 
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            formData.paymentMethod === "bkash" ? "" : "border-gray-300"
+                          }`}
+                          style={{ borderColor: formData.paymentMethod === "bkash" ? themeColor : undefined }}
+                        >
+                          {formData.paymentMethod === "bkash" && (
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: themeColor }} />
+                          )}
+                        </div>
+                        <div>
+                          <span className="font-medium">bKash</span>
+                          <p className="text-xs text-gray-500">Mobile payment</p>
+                        </div>
+                      </label>
+                    )}
 
-                    <label 
-                      className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
-                        formData.paymentMethod === "nagad" ? "border-2" : "border-gray-200"
-                      }`}
-                      style={{ borderColor: formData.paymentMethod === "nagad" ? themeColor : undefined }}
-                    >
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="nagad"
-                        checked={formData.paymentMethod === "nagad"}
-                        onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                        className="sr-only"
-                      />
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          formData.paymentMethod === "nagad" ? "" : "border-gray-300"
+                    {enabledPaymentMethods.nagad && (
+                      <label 
+                        className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                          formData.paymentMethod === "nagad" ? "border-2" : "border-gray-200"
                         }`}
                         style={{ borderColor: formData.paymentMethod === "nagad" ? themeColor : undefined }}
                       >
-                        {formData.paymentMethod === "nagad" && (
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: themeColor }} />
-                        )}
-                      </div>
-                      <div>
-                        <span className="font-medium">Nagad</span>
-                        <p className="text-xs text-gray-500">Mobile payment</p>
-                      </div>
-                    </label>
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value="nagad"
+                          checked={formData.paymentMethod === "nagad"}
+                          onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                          className="sr-only"
+                        />
+                        <div 
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            formData.paymentMethod === "nagad" ? "" : "border-gray-300"
+                          }`}
+                          style={{ borderColor: formData.paymentMethod === "nagad" ? themeColor : undefined }}
+                        >
+                          {formData.paymentMethod === "nagad" && (
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: themeColor }} />
+                          )}
+                        </div>
+                        <div>
+                          <span className="font-medium">Nagad</span>
+                          <p className="text-xs text-gray-500">Mobile payment</p>
+                        </div>
+                      </label>
+                    )}
 
-                    <label 
-                      className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
-                        formData.paymentMethod === "card" ? "border-2" : "border-gray-200"
-                      }`}
-                      style={{ borderColor: formData.paymentMethod === "card" ? themeColor : undefined }}
-                    >
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="card"
-                        checked={formData.paymentMethod === "card"}
-                        onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                        className="sr-only"
-                      />
-                      <div 
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          formData.paymentMethod === "card" ? "" : "border-gray-300"
+                    {enabledPaymentMethods.card && (
+                      <label 
+                        className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                          formData.paymentMethod === "card" ? "border-2" : "border-gray-200"
                         }`}
                         style={{ borderColor: formData.paymentMethod === "card" ? themeColor : undefined }}
                       >
-                        {formData.paymentMethod === "card" && (
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: themeColor }} />
-                        )}
-                      </div>
-                      <div>
-                        <span className="font-medium">Credit/Debit Card</span>
-                        <p className="text-xs text-gray-500">Visa, Mastercard</p>
-                      </div>
-                    </label>
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value="card"
+                          checked={formData.paymentMethod === "card"}
+                          onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                          className="sr-only"
+                        />
+                        <div 
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            formData.paymentMethod === "card" ? "" : "border-gray-300"
+                          }`}
+                          style={{ borderColor: formData.paymentMethod === "card" ? themeColor : undefined }}
+                        >
+                          {formData.paymentMethod === "card" && (
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: themeColor }} />
+                          )}
+                        </div>
+                        <div>
+                          <span className="font-medium">Credit/Debit Card</span>
+                          <p className="text-xs text-gray-500">Visa, Mastercard</p>
+                        </div>
+                      </label>
+                    )}
                   </div>
                 </div>
 

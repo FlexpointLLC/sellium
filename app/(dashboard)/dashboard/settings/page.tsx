@@ -147,6 +147,19 @@ function SettingsPageContent() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Payment settings
+  const [paymentSettings, setPaymentSettings] = useState({
+    payment_methods: {
+      bkash: true,
+      nagad: true,
+      card: false,
+      cod: true
+    },
+    payout_method: "bkash",
+    payout_account_number: "",
+    payout_account_holder: ""
+  })
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
 
   // Custom domain settings
@@ -245,6 +258,24 @@ function SettingsPageContent() {
           email: ""
         }
       })
+
+      // Fetch payment settings
+      if (storeData.payment_settings) {
+        const paymentData = typeof storeData.payment_settings === 'string' 
+          ? JSON.parse(storeData.payment_settings) 
+          : storeData.payment_settings
+        setPaymentSettings({
+          payment_methods: paymentData.payment_methods || {
+            bkash: true,
+            nagad: true,
+            card: false,
+            cod: true
+          },
+          payout_method: paymentData.payout_method || "bkash",
+          payout_account_number: paymentData.payout_account_number || "",
+          payout_account_holder: paymentData.payout_account_holder || ""
+        })
+      }
     }
 
     // Fetch store settings for notifications
@@ -574,6 +605,32 @@ function SettingsPageContent() {
     } catch (error) {
       console.error("Banner remove error:", error)
       toast.error("Failed to remove banner")
+    }
+  }
+
+  async function handleSavePayments() {
+    if (!storeId) return
+    
+    setSaving(true)
+    
+    try {
+      const { error } = await supabase
+        .from("stores")
+        .update({
+          payment_settings: paymentSettings,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", storeId)
+
+      if (error) {
+        toast.error("Failed to save payment settings")
+      } else {
+        toast.success("Payment settings saved successfully")
+      }
+    } catch (err) {
+      toast.error("Failed to save payment settings")
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -1940,7 +1997,18 @@ function SettingsPageContent() {
                           <p className="text-xs text-muted-foreground">Mobile banking payment</p>
                         </div>
                       </div>
-                      <Switch defaultChecked />
+                      <Switch 
+                        checked={paymentSettings.payment_methods.bkash}
+                        onCheckedChange={(checked) => 
+                          setPaymentSettings({
+                            ...paymentSettings,
+                            payment_methods: {
+                              ...paymentSettings.payment_methods,
+                              bkash: checked
+                            }
+                          })
+                        }
+                      />
                     </div>
                     <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                       <div className="flex items-center gap-3">
@@ -1952,7 +2020,18 @@ function SettingsPageContent() {
                           <p className="text-xs text-muted-foreground">Mobile banking payment</p>
                         </div>
                       </div>
-                      <Switch defaultChecked />
+                      <Switch 
+                        checked={paymentSettings.payment_methods.nagad}
+                        onCheckedChange={(checked) => 
+                          setPaymentSettings({
+                            ...paymentSettings,
+                            payment_methods: {
+                              ...paymentSettings.payment_methods,
+                              nagad: checked
+                            }
+                          })
+                        }
+                      />
                     </div>
                     <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                       <div className="flex items-center gap-3">
@@ -1964,7 +2043,18 @@ function SettingsPageContent() {
                           <p className="text-xs text-muted-foreground">Visa, Mastercard, Amex</p>
                         </div>
                       </div>
-                      <Switch />
+                      <Switch 
+                        checked={paymentSettings.payment_methods.card}
+                        onCheckedChange={(checked) => 
+                          setPaymentSettings({
+                            ...paymentSettings,
+                            payment_methods: {
+                              ...paymentSettings.payment_methods,
+                              card: checked
+                            }
+                          })
+                        }
+                      />
                     </div>
                     <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                       <div className="flex items-center gap-3">
@@ -1976,7 +2066,18 @@ function SettingsPageContent() {
                           <p className="text-xs text-muted-foreground">Pay when you receive</p>
                         </div>
                       </div>
-                      <Switch defaultChecked />
+                      <Switch 
+                        checked={paymentSettings.payment_methods.cod}
+                        onCheckedChange={(checked) => 
+                          setPaymentSettings({
+                            ...paymentSettings,
+                            payment_methods: {
+                              ...paymentSettings.payment_methods,
+                              cod: checked
+                            }
+                          })
+                        }
+                      />
                     </div>
                   </div>
                 </div>
@@ -1987,7 +2088,15 @@ function SettingsPageContent() {
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Payout Method</Label>
-                      <Select defaultValue="bkash">
+                      <Select 
+                        value={paymentSettings.payout_method}
+                        onValueChange={(value) => 
+                          setPaymentSettings({
+                            ...paymentSettings,
+                            payout_method: value
+                          })
+                        }
+                      >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -2000,18 +2109,36 @@ function SettingsPageContent() {
                     </div>
                     <div className="space-y-2">
                       <Label>Account Number</Label>
-                      <Input placeholder="01XXXXXXXXX" />
+                      <Input 
+                        placeholder="01XXXXXXXXX" 
+                        value={paymentSettings.payout_account_number}
+                        onChange={(e) => 
+                          setPaymentSettings({
+                            ...paymentSettings,
+                            payout_account_number: e.target.value
+                          })
+                        }
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Account Holder Name</Label>
-                    <Input placeholder="Your full name" />
+                    <Input 
+                      placeholder="Your full name" 
+                      value={paymentSettings.payout_account_holder}
+                      onChange={(e) => 
+                        setPaymentSettings({
+                          ...paymentSettings,
+                          payout_account_holder: e.target.value
+                        })
+                      }
+                    />
                   </div>
                 </div>
 
                 <div className="flex justify-end gap-4 pt-4 border-t border-border/50">
                   <Button variant="outline" size="sm">Cancel</Button>
-                  <Button size="sm" disabled={saving}>
+                  <Button size="sm" onClick={handleSavePayments} disabled={saving}>
                     {saving ? "Saving..." : "Save Changes"}
                   </Button>
                 </div>

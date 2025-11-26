@@ -42,6 +42,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'banner_images') THEN
     ALTER TABLE public.stores ADD COLUMN banner_images TEXT[] DEFAULT '{}';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'payment_settings') THEN
+    ALTER TABLE public.stores ADD COLUMN payment_settings JSONB;
+  END IF;
 END $$;
 
 -- Add missing columns to categories
