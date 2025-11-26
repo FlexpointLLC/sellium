@@ -222,11 +222,11 @@ export default function DashboardPage() {
     )
   }
 
-  // Use custom domain if verified, otherwise use default sellium.store/username
+  // Use custom domain if verified, otherwise use default subdomain
   const storefrontUrl = customDomain?.status === 'verified'
     ? `https://${customDomain.domain}`
     : process.env.NODE_ENV === 'production' 
-      ? `https://sellium.store/${store.username}`
+      ? `https://${store.username}.sellium.store`
       : `http://localhost:3000/${store.username}`
   const planInfo = planLimits[store.plan] || planLimits.free
   const statusColor = store.status === "active" ? "text-green-600 bg-green-500/10" : "text-yellow-600 bg-yellow-500/10"
@@ -292,7 +292,7 @@ export default function DashboardPage() {
                     target="_blank"
                     className="text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {customDomain?.status === 'verified' ? customDomain.domain : `sellium.store/${store.username}`}
+                    {customDomain?.status === 'verified' ? customDomain.domain : `${store.username}.sellium.store`}
                   </Link>
                   <ArrowSquareOut className="h-3.5 w-3.5 text-muted-foreground" />
                   <Link href="/dashboard/settings?tab=domain" className="text-primary hover:underline">
