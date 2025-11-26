@@ -12,6 +12,7 @@ interface FloatingButtonsProps {
   themeColor: string
   whatsappNumber?: string
   currency?: string
+  linquoOrgId?: string | null
 }
 
 // Currency symbols mapping
@@ -28,7 +29,7 @@ function formatPrice(price: number, currency: string): string {
   return `${symbol} ${price.toFixed(2)}`
 }
 
-export function FloatingButtons({ username, themeColor, whatsappNumber, currency = "BDT" }: FloatingButtonsProps) {
+export function FloatingButtons({ username, themeColor, whatsappNumber, currency = "BDT", linquoOrgId }: FloatingButtonsProps) {
   const { items, itemCount, subtotal, updateQuantity, removeItem } = useCart()
   const { getUrl } = useStorefrontUrl(username)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -71,7 +72,7 @@ export function FloatingButtons({ username, themeColor, whatsappNumber, currency
   return (
     <>
       {/* Floating Cart Button & Panel */}
-      <div ref={panelRef} className="fixed bottom-24 right-6 z-50">
+      <div ref={panelRef} className={`fixed ${linquoOrgId ? 'bottom-24' : 'bottom-6'} right-6 z-50`}>
         {/* Expanded Cart Panel */}
         {isExpanded && (
           <div 

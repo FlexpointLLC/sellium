@@ -378,7 +378,7 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border/50 bg-card overflow-x-auto">
+      <div className="rounded-xl border border-border/50 bg-card overflow-x-auto scrollbar-hide">
         <table className="w-full min-w-[750px]">
           <thead>
             <tr className="border-b border-border/50">
@@ -469,7 +469,7 @@ export default function CustomersPage() {
 
       {/* Add Customer Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Customer</DialogTitle>
             <DialogDescription>
@@ -565,7 +565,7 @@ export default function CustomersPage() {
 
       {/* Edit Customer Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Customer</DialogTitle>
             <DialogDescription>
@@ -661,7 +661,7 @@ export default function CustomersPage() {
 
       {/* View Customer Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Customer Details</DialogTitle>
           </DialogHeader>

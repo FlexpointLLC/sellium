@@ -1436,7 +1436,7 @@ export default function ProductsPage() {
           </div>
         ) : (
           <div className="rounded-lg border overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto scrollbar-hide">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border/50 bg-muted/50">
@@ -1867,7 +1867,7 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border/50 bg-card overflow-x-auto">
+      <div className="rounded-lg border border-border/50 bg-card overflow-x-auto scrollbar-hide">
         <table className="w-full min-w-[700px]">
           <thead>
             <tr className="border-b border-border/50">

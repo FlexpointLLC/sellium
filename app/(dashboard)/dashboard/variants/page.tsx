@@ -318,7 +318,7 @@ export default function VariantsPage() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-border/50 bg-card overflow-x-auto">
+      <div className="rounded-lg border border-border/50 bg-card overflow-x-auto scrollbar-hide">
         <table className="w-full min-w-[500px]">
           <thead>
             <tr className="border-b border-border/50">
@@ -399,7 +399,7 @@ export default function VariantsPage() {
 
       {/* Add Variant Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsAddDialogOpen(open); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Variant Template</DialogTitle>
             <DialogDescription>
@@ -484,7 +484,7 @@ export default function VariantsPage() {
 
       {/* Edit Variant Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsEditDialogOpen(open); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Variant Template</DialogTitle>
             <DialogDescription>

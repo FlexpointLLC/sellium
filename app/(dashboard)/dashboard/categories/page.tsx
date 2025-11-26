@@ -908,7 +908,7 @@ export default function CategoriesPage() {
           </div>
         )}
         
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-hide">
           <table className="w-full min-w-[650px]">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">
@@ -957,7 +957,7 @@ export default function CategoriesPage() {
         setIsAddDialogOpen(open)
         if (!open) resetForm()
       }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Category</DialogTitle>
             <DialogDescription>
@@ -1096,7 +1096,7 @@ export default function CategoriesPage() {
         setIsEditDialogOpen(open)
         if (!open) resetForm()
       }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Category</DialogTitle>
             <DialogDescription>

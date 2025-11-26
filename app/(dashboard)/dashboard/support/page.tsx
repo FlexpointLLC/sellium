@@ -586,7 +586,7 @@ export default function SupportPage() {
 
       {/* New Ticket Dialog */}
       <Dialog open={isNewTicketDialogOpen} onOpenChange={setIsNewTicketDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Support Ticket</DialogTitle>
             <DialogDescription>

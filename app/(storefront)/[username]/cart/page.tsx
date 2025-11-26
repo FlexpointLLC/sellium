@@ -403,6 +403,7 @@ function CartContent({ params }: { params: { username: string } }) {
         themeColor={themeColor}
         whatsappNumber={store.social_links?.whatsapp}
         currency={store.currency}
+        linquoOrgId={store.linquo_org_id}
       />
     </div>
   )

@@ -406,7 +406,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border/50 bg-card overflow-x-auto">
+      <div className="rounded-xl border border-border/50 bg-card overflow-x-auto scrollbar-hide">
         <table className="w-full min-w-[800px]">
           <thead>
             <tr className="border-b border-border/50">
