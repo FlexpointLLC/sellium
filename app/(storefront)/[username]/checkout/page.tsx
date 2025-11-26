@@ -100,6 +100,8 @@ function CheckoutContent({ params }: { params: { username: string } }) {
     nagad: true,
     card: false
   })
+  const [shippingCost, setShippingCost] = useState(0)
+  const [freeShipping, setFreeShipping] = useState(true)
   
   const { items, itemCount, subtotal, clearCart } = useCart()
 
@@ -169,6 +171,12 @@ function CheckoutContent({ params }: { params: { username: string } }) {
           setFormData(prev => ({ ...prev, paymentMethod: "card" }))
         }
       }
+
+      // Set shipping settings
+      if (paymentData.shipping) {
+        setFreeShipping(paymentData.shipping.free_shipping !== undefined ? paymentData.shipping.free_shipping : true)
+        setShippingCost(paymentData.shipping.shipping_cost || 0)
+      }
     }
 
     // Fetch categories for navigation (include parent_id for nested dropdowns)
@@ -210,7 +218,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
       const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`
       
       // Calculate totals
-      const shipping = 0
+      const shipping = freeShipping ? 0 : shippingCost
       const tax = 0
       const total = subtotal + shipping + tax
 
@@ -401,7 +409,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
   const currency = store.currency || "BDT"
 
   // Calculate totals
-  const shipping = 0
+  const shipping = freeShipping ? 0 : shippingCost
   const tax = 0
   const total = subtotal + shipping + tax
 
@@ -854,7 +862,13 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Shipping</span>
-                      <span className="font-medium text-green-600">Free</span>
+                      <span className="font-medium">
+                        {freeShipping ? (
+                          <span className="text-green-600">Free</span>
+                        ) : (
+                          formatPrice(shipping, currency)
+                        )}
+                      </span>
                     </div>
                     {tax > 0 && (
                       <div className="flex justify-between">

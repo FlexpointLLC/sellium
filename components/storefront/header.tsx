@@ -263,13 +263,13 @@ export function StorefrontHeader({
                     </span>
                   )}
                 </Link>
-                <a 
-                  href="#" 
+                <Link 
+                  href={getUrl('/account')}
                   className="p-2 hover:bg-gray-100 rounded-full transition-colors"
                   title="Account"
                 >
                   <User className="h-5 w-5" />
-                </a>
+                </Link>
               </div>
             </div>
           </div>

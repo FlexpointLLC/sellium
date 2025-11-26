@@ -160,6 +160,12 @@ function SettingsPageContent() {
     payout_account_number: "",
     payout_account_holder: ""
   })
+
+  // Shipping settings
+  const [shippingSettings, setShippingSettings] = useState({
+    free_shipping: true,
+    shipping_cost: 0
+  })
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
 
   // Custom domain settings
@@ -274,6 +280,17 @@ function SettingsPageContent() {
           payout_method: paymentData.payout_method || "bkash",
           payout_account_number: paymentData.payout_account_number || "",
           payout_account_holder: paymentData.payout_account_holder || ""
+        })
+      }
+
+      // Fetch shipping settings
+      if (storeData.payment_settings) {
+        const paymentData = typeof storeData.payment_settings === 'string' 
+          ? JSON.parse(storeData.payment_settings) 
+          : storeData.payment_settings
+        setShippingSettings({
+          free_shipping: paymentData.shipping?.free_shipping !== undefined ? paymentData.shipping.free_shipping : true,
+          shipping_cost: paymentData.shipping?.shipping_cost || 0
         })
       }
     }
@@ -614,10 +631,16 @@ function SettingsPageContent() {
     setSaving(true)
     
     try {
+      // Merge payment settings with shipping settings
+      const updatedPaymentSettings = {
+        ...paymentSettings,
+        shipping: shippingSettings
+      }
+
       const { error } = await supabase
         .from("stores")
         .update({
-          payment_settings: paymentSettings,
+          payment_settings: updatedPaymentSettings,
           updated_at: new Date().toISOString()
         })
         .eq("id", storeId)
@@ -1233,38 +1256,21 @@ function SettingsPageContent() {
                   </div>
                 </div>
 
-                {/* Currency & Timezone */}
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Currency</Label>
-                    <Select value={store.currency} onValueChange={(v) => setStore({ ...store, currency: v })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BDT">BDT - Bangladeshi Taka</SelectItem>
-                        <SelectItem value="USD">USD - US Dollar</SelectItem>
-                        <SelectItem value="EUR">EUR - Euro</SelectItem>
-                        <SelectItem value="GBP">GBP - British Pound</SelectItem>
-                        <SelectItem value="INR">INR - Indian Rupee</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Timezone</Label>
-                    <Select value={store.timezone} onValueChange={(v) => setStore({ ...store, timezone: v })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Asia/Dhaka">Asia/Dhaka (GMT+6)</SelectItem>
-                        <SelectItem value="Asia/Kolkata">Asia/Kolkata (GMT+5:30)</SelectItem>
-                        <SelectItem value="America/New_York">America/New_York (GMT-5)</SelectItem>
-                        <SelectItem value="Europe/London">Europe/London (GMT+0)</SelectItem>
-                        <SelectItem value="Asia/Dubai">Asia/Dubai (GMT+4)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {/* Timezone */}
+                <div className="space-y-2">
+                  <Label>Timezone</Label>
+                  <Select value={store.timezone} onValueChange={(v) => setStore({ ...store, timezone: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Asia/Dhaka">Asia/Dhaka (GMT+6)</SelectItem>
+                      <SelectItem value="Asia/Kolkata">Asia/Kolkata (GMT+5:30)</SelectItem>
+                      <SelectItem value="America/New_York">America/New_York (GMT-5)</SelectItem>
+                      <SelectItem value="Europe/London">Europe/London (GMT+0)</SelectItem>
+                      <SelectItem value="Asia/Dubai">Asia/Dubai (GMT+4)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Social Links */}
@@ -1983,6 +1989,75 @@ function SettingsPageContent() {
               </div>
 
               <div className="space-y-6">
+                {/* Currency */}
+                <div className="space-y-2">
+                  <Label>Currency</Label>
+                  <Select value={store.currency} onValueChange={(v) => setStore({ ...store, currency: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BDT">BDT - Bangladeshi Taka</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                      <SelectItem value="INR">INR - Indian Rupee</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Currency used for all payments and transactions
+                  </p>
+                </div>
+
+                {/* Shipping Settings */}
+                <div className="space-y-4 p-4 rounded-xl bg-green-50 dark:bg-green-400/15 border border-green-200 dark:border-green-300/25">
+                  <div>
+                    <h3 className="text-sm font-medium mb-1">Shipping Settings</h3>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Configure shipping charges for your store
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 border border-border/50 rounded-xl bg-background">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm font-medium">Free Shipping</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Enable free shipping for all orders
+                      </p>
+                    </div>
+                    <Switch 
+                      checked={shippingSettings.free_shipping}
+                      onCheckedChange={(checked) => 
+                        setShippingSettings({
+                          ...shippingSettings,
+                          free_shipping: checked
+                        })
+                      }
+                    />
+                  </div>
+                  {!shippingSettings.free_shipping && (
+                    <div className="space-y-2">
+                      <Label>Shipping Cost ({store.currency})</Label>
+                      <Input 
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={shippingSettings.shipping_cost}
+                        onChange={(e) => 
+                          setShippingSettings({
+                            ...shippingSettings,
+                            shipping_cost: parseFloat(e.target.value) || 0
+                          })
+                        }
+                        placeholder="0.00"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Enter the shipping cost that will be charged to customers
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 {/* Payment Methods */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Accepted Payment Methods</h3>

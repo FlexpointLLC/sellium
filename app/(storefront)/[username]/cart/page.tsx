@@ -87,6 +87,8 @@ function CartContent({ params }: { params: { username: string } }) {
   const { getUrl } = useStorefrontUrl(params.username)
   
   const { items, itemCount, subtotal, updateQuantity, removeItem, clearCart } = useCart()
+  const [shippingCost, setShippingCost] = useState(0)
+  const [freeShipping, setFreeShipping] = useState(true)
 
   // Set custom favicon and meta tags
   useStoreMeta(store)
@@ -99,7 +101,7 @@ function CartContent({ params }: { params: { username: string } }) {
   async function fetchStore() {
     const { data: storeData, error: storeError } = await supabase
       .from("stores")
-      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description, linquo_org_id")
+      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description, linquo_org_id, payment_settings")
       .eq("username", params.username)
       .single()
 
@@ -113,6 +115,18 @@ function CartContent({ params }: { params: { username: string } }) {
       ...storeData,
       currency: storeData.currency || "BDT"
     })
+
+    // Set shipping settings
+    if (storeData.payment_settings) {
+      const paymentData = typeof storeData.payment_settings === 'string' 
+        ? JSON.parse(storeData.payment_settings) 
+        : storeData.payment_settings
+      
+      if (paymentData.shipping) {
+        setFreeShipping(paymentData.shipping.free_shipping !== undefined ? paymentData.shipping.free_shipping : true)
+        setShippingCost(paymentData.shipping.shipping_cost || 0)
+      }
+    }
 
     // Fetch categories for navigation (include parent_id for nested dropdowns)
     const { data: categoriesData } = await supabase
@@ -148,7 +162,7 @@ function CartContent({ params }: { params: { username: string } }) {
   const currency = store.currency || "BDT"
 
   // Calculate totals
-  const shipping = 0 // Free shipping or calculate based on rules
+  const shipping = freeShipping ? 0 : shippingCost
   const tax = 0 // Calculate based on tax rules
   const total = subtotal + shipping + tax
 
@@ -339,7 +353,13 @@ function CartContent({ params }: { params: { username: string } }) {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Shipping</span>
-                    <span className="font-medium text-green-600">Free</span>
+                    <span className="font-medium">
+                      {freeShipping ? (
+                        <span className="text-green-600">Free</span>
+                      ) : (
+                        formatPrice(shipping, currency)
+                      )}
+                    </span>
                   </div>
                   {tax > 0 && (
                     <div className="flex justify-between">
