@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
+import { createClient } from '@supabase/supabase-js'
 
 // Routes that don't require authentication (for admin subdomain)
 const publicRoutes = ['/', '/login', '/verify', '/auth/callback', '/onboarding']
@@ -7,9 +8,84 @@ const publicRoutes = ['/', '/login', '/verify', '/auth/callback', '/onboarding']
 // Dashboard/admin routes that require authentication
 const dashboardRoutes = ['/dashboard', '/login', '/verify', '/onboarding', '/auth']
 
+// Known Sellium domains (not custom domains)
+const selliumDomains = [
+  'sellium.store',
+  'my.sellium.store',
+  'admin.sellium.store',
+  'localhost',
+  '127.0.0.1',
+  'vercel.app'
+]
+
+// Check if hostname is a custom domain
+function isCustomDomain(hostname: string): boolean {
+  // Remove port if present
+  const host = hostname.split(':')[0]
+  
+  // Check if it's NOT a known Sellium domain
+  return !selliumDomains.some(domain => 
+    host === domain || host.endsWith(`.${domain}`)
+  )
+}
+
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || ''
   const pathname = request.nextUrl.pathname
+  
+  // Check if this is a custom domain request
+  if (isCustomDomain(hostname)) {
+    // Skip API routes and static files
+    if (pathname.startsWith('/api/') || pathname.startsWith('/_next/')) {
+      return NextResponse.next()
+    }
+    
+    try {
+      // Create Supabase client for edge
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      
+      // Look up the store by custom domain
+      const domain = hostname.split(':')[0].toLowerCase()
+      const { data: domainData } = await supabase
+        .from('custom_domains')
+        .select('store_id, status')
+        .eq('domain', domain)
+        .eq('status', 'verified')
+        .single()
+      
+      if (domainData) {
+        // Get the store username
+        const { data: store } = await supabase
+          .from('stores')
+          .select('username')
+          .eq('id', domainData.store_id)
+          .single()
+        
+        if (store?.username) {
+          // Rewrite the URL to the store's path
+          // e.g., blenko.store/products -> /blenko/products
+          const url = request.nextUrl.clone()
+          
+          if (pathname === '/') {
+            url.pathname = `/${store.username}`
+          } else {
+            url.pathname = `/${store.username}${pathname}`
+          }
+          
+          return NextResponse.rewrite(url)
+        }
+      }
+      
+      // Domain not found or not verified - show 404 or redirect
+      return NextResponse.next()
+    } catch (error) {
+      console.error('Custom domain lookup error:', error)
+      return NextResponse.next()
+    }
+  }
   
   // Check if we're on the admin subdomain (admin.sellium.store)
   // For localhost, we determine admin vs storefront by the route path
