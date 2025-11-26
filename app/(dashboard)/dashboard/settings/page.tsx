@@ -87,12 +87,20 @@ export default function SettingsPage() {
   })
 
   // Custom domain settings
-  const [customDomain, setCustomDomain] = useState({
+  const [customDomain, setCustomDomain] = useState<{
+    id?: string
+    domain: string
+    status: "not_configured" | "pending" | "verifying" | "verified" | "failed"
+    ssl_status: "pending" | "provisioning" | "active" | "failed"
+    verification_token?: string
+    dns_configured?: boolean
+  }>({
     domain: "",
-    status: "not_configured" as "not_configured" | "pending" | "verified" | "failed",
-    ssl_status: "pending" as "pending" | "active" | "failed"
+    status: "not_configured",
+    ssl_status: "pending"
   })
   const [verifyingDomain, setVerifyingDomain] = useState(false)
+  const [domainInput, setDomainInput] = useState("")
 
   useEffect(() => {
     fetchData()
@@ -177,6 +185,24 @@ export default function SettingsPage() {
         push_order_update: false,
         push_low_stock: true,
         push_new_review: false
+      })
+    }
+
+    // Fetch custom domain
+    const { data: domainData } = await supabase
+      .from("custom_domains")
+      .select("*")
+      .eq("store_id", storeData?.id)
+      .single()
+
+    if (domainData) {
+      setCustomDomain({
+        id: domainData.id,
+        domain: domainData.domain,
+        status: domainData.status || "pending",
+        ssl_status: domainData.ssl_status || "pending",
+        verification_token: domainData.verification_token,
+        dns_configured: domainData.dns_configured
       })
     }
 
@@ -448,6 +474,137 @@ export default function SettingsPage() {
     } else {
       toast.success("Password reset email sent!")
     }
+  }
+
+  // Generate a verification token
+  function generateVerificationToken() {
+    return `sellium-verify-${storeId?.slice(0, 8)}-${Date.now().toString(36)}`
+  }
+
+  // Add custom domain
+  async function handleAddDomain() {
+    if (!storeId || !domainInput.trim()) return
+
+    // Validate domain format
+    const domainRegex = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/
+    if (!domainRegex.test(domainInput.trim())) {
+      toast.error("Please enter a valid domain name")
+      return
+    }
+
+    setVerifyingDomain(true)
+
+    const verificationToken = generateVerificationToken()
+
+    const { data, error } = await supabase
+      .from("custom_domains")
+      .insert({
+        store_id: storeId,
+        domain: domainInput.trim().toLowerCase(),
+        status: "pending",
+        ssl_status: "pending",
+        verification_token: verificationToken
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Error adding domain:", error)
+      if (error.code === "23505") {
+        toast.error("This domain is already in use")
+      } else {
+        toast.error(error.message || "Failed to add domain")
+      }
+      setVerifyingDomain(false)
+      return
+    }
+
+    setCustomDomain({
+      id: data.id,
+      domain: data.domain,
+      status: "pending",
+      ssl_status: "pending",
+      verification_token: verificationToken,
+      dns_configured: false
+    })
+    setDomainInput("")
+    setVerifyingDomain(false)
+    toast.success("Domain added! Please configure DNS records.")
+  }
+
+  // Verify DNS configuration
+  async function handleVerifyDomain() {
+    if (!customDomain.id) return
+
+    setVerifyingDomain(true)
+
+    // Update status to verifying
+    await supabase
+      .from("custom_domains")
+      .update({ 
+        status: "verifying",
+        last_checked_at: new Date().toISOString()
+      })
+      .eq("id", customDomain.id)
+
+    // In a real implementation, you would:
+    // 1. Call Vercel API to add the domain
+    // 2. Check DNS records
+    // 3. Provision SSL certificate
+    
+    // For now, we'll simulate the verification process
+    // In production, this would be a server-side API call to Vercel
+    
+    setTimeout(async () => {
+      // Simulate successful verification
+      const { error } = await supabase
+        .from("custom_domains")
+        .update({ 
+          status: "verified",
+          ssl_status: "active",
+          dns_configured: true,
+          verified_at: new Date().toISOString(),
+          last_checked_at: new Date().toISOString()
+        })
+        .eq("id", customDomain.id)
+
+      if (error) {
+        toast.error("Failed to update domain status")
+        setVerifyingDomain(false)
+        return
+      }
+
+      setCustomDomain({
+        ...customDomain,
+        status: "verified",
+        ssl_status: "active",
+        dns_configured: true
+      })
+      setVerifyingDomain(false)
+      toast.success("Domain verified successfully!")
+    }, 2000)
+  }
+
+  // Remove custom domain
+  async function handleRemoveDomain() {
+    if (!customDomain.id) return
+
+    const { error } = await supabase
+      .from("custom_domains")
+      .delete()
+      .eq("id", customDomain.id)
+
+    if (error) {
+      toast.error("Failed to remove domain")
+      return
+    }
+
+    setCustomDomain({
+      domain: "",
+      status: "not_configured",
+      ssl_status: "pending"
+    })
+    toast.success("Domain removed successfully")
   }
 
   const tabs = [
@@ -879,13 +1036,13 @@ export default function SettingsPage() {
             <div className="rounded-lg border bg-card p-6">
               <div className="mb-6">
                 <h2 className="text-lg font-semibold">Custom Domain</h2>
-                <p className="text-sm text-muted-foreground">Connect your own domain to your store</p>
+                <p className="text-sm text-muted-foreground">Connect your own domain to your store using Vercel DNS</p>
               </div>
 
               <div className="space-y-6">
                 {/* Current Domain Status */}
                 <div className="space-y-4">
-                  <h3 className="text-sm font-medium">Current Domain</h3>
+                  <h3 className="text-sm font-medium">Default Domain</h3>
                   <div className="p-4 border rounded-lg bg-muted/50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -905,45 +1062,43 @@ export default function SettingsPage() {
 
                 {/* Add Custom Domain */}
                 <div className="space-y-4 pt-4 border-t">
-                  <h3 className="text-sm font-medium">Add Custom Domain</h3>
+                  <h3 className="text-sm font-medium">Custom Domain</h3>
                   <p className="text-sm text-muted-foreground">
                     Use your own domain (e.g., shop.yourbrand.com) instead of the default Sellium subdomain.
                   </p>
                   
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Domain Name</Label>
-                      <div className="flex gap-2">
-                        <Input 
-                          placeholder="shop.yourbrand.com"
-                          value={customDomain.domain}
-                          onChange={(e) => setCustomDomain({ ...customDomain, domain: e.target.value })}
-                        />
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          disabled={!customDomain.domain || verifyingDomain}
-                          onClick={() => {
-                            setVerifyingDomain(true)
-                            // Simulate domain verification
-                            setTimeout(() => {
-                              setCustomDomain({ ...customDomain, status: "pending" })
-                              setVerifyingDomain(false)
-                              toast.success("Domain added! Please configure DNS records.")
-                            }, 1500)
-                          }}
-                        >
-                          {verifyingDomain ? (
-                            <>
-                              <ArrowsClockwise className="h-4 w-4 mr-2 animate-spin" />
-                              Adding...
-                            </>
-                          ) : (
-                            "Add Domain"
-                          )}
-                        </Button>
+                    {/* Show input only if no domain configured */}
+                    {customDomain.status === "not_configured" && (
+                      <div className="space-y-2">
+                        <Label>Domain Name</Label>
+                        <div className="flex gap-2">
+                          <Input 
+                            placeholder="shop.yourbrand.com"
+                            value={domainInput}
+                            onChange={(e) => setDomainInput(e.target.value)}
+                          />
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            disabled={!domainInput.trim() || verifyingDomain}
+                            onClick={handleAddDomain}
+                          >
+                            {verifyingDomain ? (
+                              <>
+                                <ArrowsClockwise className="h-4 w-4 mr-2 animate-spin" />
+                                Adding...
+                              </>
+                            ) : (
+                              "Add Domain"
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Enter your domain without http:// or https://
+                        </p>
                       </div>
-                    </div>
+                    )}
 
                     {/* Domain Status */}
                     {customDomain.status !== "not_configured" && (
@@ -959,64 +1114,102 @@ export default function SettingsPage() {
                           <span className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${
                             customDomain.status === "verified" 
                               ? "text-green-600 bg-green-500/10" 
-                              : customDomain.status === "pending"
+                              : customDomain.status === "pending" || customDomain.status === "verifying"
                               ? "text-yellow-600 bg-yellow-500/10"
                               : "text-red-600 bg-red-500/10"
                           }`}>
                             {customDomain.status === "verified" && <CheckCircle className="h-3 w-3" />}
-                            {customDomain.status === "pending" && <ArrowsClockwise className="h-3 w-3" />}
+                            {(customDomain.status === "pending" || customDomain.status === "verifying") && <ArrowsClockwise className="h-3 w-3" />}
                             {customDomain.status === "failed" && <XCircle className="h-3 w-3" />}
-                            {customDomain.status === "verified" ? "Verified" : customDomain.status === "pending" ? "Pending" : "Failed"}
+                            {customDomain.status === "verified" ? "Verified" : customDomain.status === "verifying" ? "Verifying..." : customDomain.status === "pending" ? "Pending DNS" : "Failed"}
                           </span>
                         </div>
 
-                        {customDomain.status === "pending" && (
-                          <div className="space-y-3">
-                            <p className="text-sm text-muted-foreground">
-                              Add the following DNS records to your domain provider:
-                            </p>
-                            <div className="bg-muted rounded-lg p-4 space-y-3 text-sm font-mono">
-                              <div className="grid grid-cols-3 gap-4">
-                                <div>
-                                  <p className="text-xs text-muted-foreground mb-1">Type</p>
-                                  <p>CNAME</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground mb-1">Name</p>
-                                  <p>@</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground mb-1">Value</p>
-                                  <p className="text-xs break-all">cname.sellium.store</p>
-                                </div>
-                              </div>
-                              <div className="border-t pt-3 grid grid-cols-3 gap-4">
-                                <div>
-                                  <p className="text-xs text-muted-foreground mb-1">Type</p>
-                                  <p>TXT</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground mb-1">Name</p>
-                                  <p>_sellium</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground mb-1">Value</p>
-                                  <p className="text-xs break-all">verify={storeId?.slice(0, 12)}</p>
-                                </div>
-                              </div>
+                        {(customDomain.status === "pending" || customDomain.status === "failed") && (
+                          <div className="space-y-4">
+                            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium mb-1">
+                                Configure DNS with Vercel
+                              </p>
+                              <p className="text-xs text-blue-600 dark:text-blue-400">
+                                Add the following DNS records to your domain provider. DNS changes may take up to 48 hours to propagate.
+                              </p>
                             </div>
+                            
+                            <div className="bg-muted rounded-lg p-4 space-y-4 text-sm">
+                              {/* For apex domain */}
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-2 font-medium">For apex domain ({customDomain.domain}):</p>
+                                <div className="grid grid-cols-3 gap-4 bg-background p-3 rounded border">
+                                  <div>
+                                    <p className="text-xs text-muted-foreground mb-1">Type</p>
+                                    <p className="font-mono text-xs">A</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground mb-1">Name</p>
+                                    <p className="font-mono text-xs">@</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground mb-1">Value</p>
+                                    <p className="font-mono text-xs">76.76.21.21</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* For www subdomain */}
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-2 font-medium">For www subdomain:</p>
+                                <div className="grid grid-cols-3 gap-4 bg-background p-3 rounded border">
+                                  <div>
+                                    <p className="text-xs text-muted-foreground mb-1">Type</p>
+                                    <p className="font-mono text-xs">CNAME</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground mb-1">Name</p>
+                                    <p className="font-mono text-xs">www</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground mb-1">Value</p>
+                                    <p className="font-mono text-xs break-all">cname.vercel-dns.com</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Verification TXT record */}
+                              {customDomain.verification_token && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-2 font-medium">Verification record (optional):</p>
+                                  <div className="grid grid-cols-3 gap-4 bg-background p-3 rounded border">
+                                    <div>
+                                      <p className="text-xs text-muted-foreground mb-1">Type</p>
+                                      <p className="font-mono text-xs">TXT</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground mb-1">Name</p>
+                                      <p className="font-mono text-xs">_vercel</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground mb-1">Value</p>
+                                      <p className="font-mono text-xs break-all">{customDomain.verification_token}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {customDomain.status === "failed" && (
+                              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                <p className="text-sm text-red-600 dark:text-red-400">
+                                  DNS verification failed. Please check your DNS records and try again.
+                                </p>
+                              </div>
+                            )}
+
                             <div className="flex gap-2">
                               <Button 
                                 variant="outline" 
                                 size="sm"
-                                onClick={() => {
-                                  setVerifyingDomain(true)
-                                  setTimeout(() => {
-                                    setCustomDomain({ ...customDomain, status: "verified", ssl_status: "active" })
-                                    setVerifyingDomain(false)
-                                    toast.success("Domain verified successfully!")
-                                  }, 2000)
-                                }}
+                                onClick={handleVerifyDomain}
                                 disabled={verifyingDomain}
                               >
                                 {verifyingDomain ? (
@@ -1035,11 +1228,20 @@ export default function SettingsPage() {
                                 variant="ghost" 
                                 size="sm"
                                 className="text-destructive hover:text-destructive"
-                                onClick={() => setCustomDomain({ domain: "", status: "not_configured", ssl_status: "pending" })}
+                                onClick={handleRemoveDomain}
                               >
                                 <Trash className="h-4 w-4 mr-2" />
                                 Remove
                               </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {customDomain.status === "verifying" && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-sm">
+                              <ArrowsClockwise className="h-4 w-4 text-yellow-500 animate-spin" />
+                              <span>Verifying DNS configuration...</span>
                             </div>
                           </div>
                         )}
@@ -1056,18 +1258,36 @@ export default function SettingsPage() {
                                   <CheckCircle className="h-4 w-4 text-green-500" />
                                   <span>SSL certificate active</span>
                                 </>
-                              ) : (
+                              ) : customDomain.ssl_status === "provisioning" ? (
                                 <>
                                   <ArrowsClockwise className="h-4 w-4 text-yellow-500 animate-spin" />
                                   <span>SSL certificate provisioning...</span>
                                 </>
+                              ) : (
+                                <>
+                                  <XCircle className="h-4 w-4 text-red-500" />
+                                  <span>SSL certificate failed</span>
+                                </>
                               )}
+                            </div>
+                            <div className="pt-2">
+                              <p className="text-xs text-muted-foreground mb-2">
+                                Your store is now accessible at:
+                              </p>
+                              <a 
+                                href={`https://${customDomain.domain}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-sm font-medium text-primary hover:underline"
+                              >
+                                https://{customDomain.domain}
+                              </a>
                             </div>
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => setCustomDomain({ domain: "", status: "not_configured", ssl_status: "pending" })}
+                              className="text-destructive hover:text-destructive mt-2"
+                              onClick={handleRemoveDomain}
                             >
                               <Trash className="h-4 w-4 mr-2" />
                               Remove Domain
@@ -1081,19 +1301,25 @@ export default function SettingsPage() {
 
                 {/* Help Section */}
                 <div className="space-y-4 pt-4 border-t">
-                  <h3 className="text-sm font-medium">Need Help?</h3>
+                  <h3 className="text-sm font-medium">DNS Configuration Help</h3>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="p-4 border rounded-lg">
-                      <p className="text-sm font-medium mb-1">DNS Configuration Guide</p>
-                      <p className="text-xs text-muted-foreground">
-                        Learn how to configure DNS records with popular providers like GoDaddy, Namecheap, and Cloudflare.
-                      </p>
+                      <p className="text-sm font-medium mb-1">Popular DNS Providers</p>
+                      <ul className="text-xs text-muted-foreground space-y-1 mt-2">
+                        <li>• Cloudflare - DNS settings → Add record</li>
+                        <li>• GoDaddy - DNS Management → Add</li>
+                        <li>• Namecheap - Advanced DNS → Add record</li>
+                        <li>• Google Domains - DNS → Custom records</li>
+                      </ul>
                     </div>
                     <div className="p-4 border rounded-lg">
                       <p className="text-sm font-medium mb-1">Troubleshooting</p>
-                      <p className="text-xs text-muted-foreground">
-                        Common issues and solutions when setting up custom domains.
-                      </p>
+                      <ul className="text-xs text-muted-foreground space-y-1 mt-2">
+                        <li>• DNS changes can take up to 48 hours</li>
+                        <li>• Remove any existing A/CNAME records first</li>
+                        <li>• Disable proxy (orange cloud) in Cloudflare</li>
+                        <li>• Check for typos in record values</li>
+                      </ul>
                     </div>
                   </div>
                 </div>

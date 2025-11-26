@@ -1,10 +1,12 @@
 "use client"
+/* eslint-disable @next/next/no-img-element */
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ShoppingCart, MagnifyingGlass } from "phosphor-react"
+import { ShoppingCart, MagnifyingGlass, Eye, Package, MapPin, Phone, Envelope, User } from "phosphor-react"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import {
   Select,
@@ -13,7 +15,52 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { toast } from "sonner"
+
+interface OrderItem {
+  id: string
+  product_id: string
+  product_name: string
+  variant_title: string | null
+  sku: string | null
+  quantity: number
+  price: number
+  total: number
+  image_url: string | null
+}
+
+interface OrderDetails {
+  id: string
+  order_number: string
+  customer_name: string | null
+  customer_email: string
+  customer_phone: string | null
+  status: string
+  payment_status: string
+  payment_method: string | null
+  subtotal: number
+  shipping_cost: number
+  tax: number
+  total: number
+  notes: string | null
+  shipping_address: {
+    name?: string
+    street?: string
+    city?: string
+    state?: string
+    country?: string
+    postal_code?: string
+    phone?: string
+  } | null
+  created_at: string
+  items: OrderItem[]
+}
 
 interface Order {
   id: string
@@ -30,6 +77,7 @@ interface Order {
 interface Store {
   id: string
   name: string
+  currency: string
 }
 
 const statusColors: Record<string, string> = {
@@ -74,6 +122,11 @@ export default function OrdersPage() {
   const [store, setStore] = useState<Store | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  
+  // View order dialog
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<OrderDetails | null>(null)
+  const [loadingOrderDetails, setLoadingOrderDetails] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -91,7 +144,7 @@ export default function OrdersPage() {
     // Fetch store
     const { data: storeData } = await supabase
       .from("stores")
-      .select("id, name")
+      .select("id, name, currency")
       .eq("user_id", user.id)
       .single()
 
@@ -185,6 +238,108 @@ export default function OrdersPage() {
     toast.success("Payment status updated")
   }
 
+  async function viewOrderDetails(orderId: string) {
+    setLoadingOrderDetails(true)
+    setIsViewDialogOpen(true)
+
+    // Fetch order details
+    const { data: orderData, error: orderError } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("id", orderId)
+      .single()
+
+    if (orderError || !orderData) {
+      toast.error("Failed to load order details")
+      setLoadingOrderDetails(false)
+      return
+    }
+
+    // Fetch order items
+    const { data: itemsData } = await supabase
+      .from("order_items")
+      .select("*")
+      .eq("order_id", orderId)
+
+    // Fetch product SKUs for items that don't have SKU
+    let itemsWithSku = itemsData || []
+    if (itemsData && itemsData.length > 0) {
+      const productIds = itemsData.map(item => item.product_id).filter(Boolean)
+      const variantIds = itemsData.map(item => item.product_variant_id).filter(Boolean)
+      
+      // Fetch products
+      const { data: productsData } = await supabase
+        .from("products")
+        .select("id, sku, image_url")
+        .in("id", productIds)
+      
+      // Fetch variants if any
+      let variantsData: any[] = []
+      if (variantIds.length > 0) {
+        const { data: variants } = await supabase
+          .from("product_variants")
+          .select("id, sku")
+          .in("id", variantIds)
+        variantsData = variants || []
+      }
+
+      // Map SKUs to items
+      const productMap = new Map(productsData?.map(p => [p.id, p]) || [])
+      const variantMap = new Map(variantsData.map(v => [v.id, v]))
+
+      itemsWithSku = itemsData.map(item => ({
+        ...item,
+        _productSku: productMap.get(item.product_id)?.sku || null,
+        _productImage: productMap.get(item.product_id)?.image_url || null,
+        _variantSku: item.product_variant_id ? variantMap.get(item.product_variant_id)?.sku || null : null
+      }))
+    }
+
+    const orderDetails: OrderDetails = {
+      id: orderData.id,
+      order_number: orderData.order_number,
+      customer_name: orderData.customer_name,
+      customer_email: orderData.customer_email,
+      customer_phone: orderData.customer_phone,
+      status: orderData.status,
+      payment_status: orderData.payment_status,
+      payment_method: orderData.payment_method,
+      subtotal: orderData.subtotal || orderData.total,
+      shipping_cost: orderData.shipping_cost || 0,
+      tax: orderData.tax || 0,
+      total: orderData.total,
+      notes: orderData.notes,
+      shipping_address: orderData.shipping_address,
+      created_at: orderData.created_at,
+      items: itemsWithSku.map((item: any) => ({
+        id: item.id,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        variant_title: item.variant_title || item.variant_name,
+        sku: item.sku || item._variantSku || item._productSku || null,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+        image_url: item.image_url || item._productImage || null
+      }))
+    }
+
+    setSelectedOrder(orderDetails)
+    setLoadingOrderDetails(false)
+  }
+
+  function formatCurrency(amount: number) {
+    const currency = store?.currency || "USD"
+    const symbols: Record<string, string> = {
+      BDT: "৳",
+      USD: "$",
+      EUR: "€",
+      GBP: "£",
+      INR: "₹"
+    }
+    return `${symbols[currency] || currency} ${amount.toFixed(2)}`
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl flex flex-col gap-6">
@@ -262,12 +417,13 @@ export default function OrdersPage() {
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Status</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Payment</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Date</th>
+              <th className="px-6 py-3 w-12"></th>
             </tr>
           </thead>
           <tbody>
             {filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <ShoppingCart className="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <p className="text-muted-foreground">
@@ -342,12 +498,258 @@ export default function OrdersPage() {
                     </Select>
                   </td>
                   <td className="px-6 py-4 text-muted-foreground">{formatDate(order.created_at)}</td>
+                  <td className="px-6 py-4">
+                    <Button 
+                      variant="ghost" 
+                      size="icon-sm" 
+                      onClick={() => viewOrderDetails(order.id)}
+                      title="View Order Details"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {/* View Order Details Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              Order {selectedOrder?.order_number}
+            </DialogTitle>
+          </DialogHeader>
+
+          {loadingOrderDetails ? (
+            <div className="space-y-4 py-4">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : selectedOrder && (
+            <div className="space-y-6 py-4">
+              {/* Order Status */}
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Status:</span>
+                    <Select
+                      value={selectedOrder.status}
+                      onValueChange={(value) => {
+                        updateOrderStatus(selectedOrder.id, value)
+                        setSelectedOrder({ ...selectedOrder, status: value })
+                      }}
+                    >
+                      <SelectTrigger 
+                        className={`w-[130px] h-8 text-xs font-medium capitalize border ${statusColors[selectedOrder.status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((option) => (
+                          <SelectItem 
+                            key={option.value} 
+                            value={option.value}
+                            className="text-xs capitalize"
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Payment:</span>
+                    <Select
+                      value={selectedOrder.payment_status}
+                      onValueChange={(value) => {
+                        updatePaymentStatus(selectedOrder.id, value)
+                        setSelectedOrder({ ...selectedOrder, payment_status: value })
+                      }}
+                    >
+                      <SelectTrigger 
+                        className={`w-[140px] h-8 text-xs font-medium capitalize border ${paymentStatusColors[selectedOrder.payment_status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {paymentStatusOptions.map((option) => (
+                          <SelectItem 
+                            key={option.value} 
+                            value={option.value}
+                            className="text-xs capitalize"
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {formatDate(selectedOrder.created_at)}
+                </span>
+              </div>
+
+              {/* Customer Info */}
+              <div className="rounded-lg border p-4">
+                <h3 className="font-medium mb-3 flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Customer Information
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Name</p>
+                    <p className="font-medium">{selectedOrder.customer_name || "Guest"}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Email</p>
+                    <p className="font-medium flex items-center gap-1">
+                      <Envelope className="h-3 w-3" />
+                      {selectedOrder.customer_email}
+                    </p>
+                  </div>
+                  {selectedOrder.customer_phone && (
+                    <div>
+                      <p className="text-muted-foreground">Phone</p>
+                      <p className="font-medium flex items-center gap-1">
+                        <Phone className="h-3 w-3" />
+                        {selectedOrder.customer_phone}
+                      </p>
+                    </div>
+                  )}
+                  {selectedOrder.payment_method && (
+                    <div>
+                      <p className="text-muted-foreground">Payment Method</p>
+                      <p className="font-medium capitalize">{selectedOrder.payment_method}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Shipping Address */}
+              {selectedOrder.shipping_address && (
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium mb-3 flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Shipping Address
+                  </h3>
+                  <div className="text-sm">
+                    {selectedOrder.shipping_address.name && (
+                      <p className="font-medium">{selectedOrder.shipping_address.name}</p>
+                    )}
+                    {selectedOrder.shipping_address.street && (
+                      <p>{selectedOrder.shipping_address.street}</p>
+                    )}
+                    <p>
+                      {[
+                        selectedOrder.shipping_address.city,
+                        selectedOrder.shipping_address.state,
+                        selectedOrder.shipping_address.postal_code
+                      ].filter(Boolean).join(", ")}
+                    </p>
+                    {selectedOrder.shipping_address.country && (
+                      <p>{selectedOrder.shipping_address.country}</p>
+                    )}
+                    {selectedOrder.shipping_address.phone && (
+                      <p className="mt-1 flex items-center gap-1">
+                        <Phone className="h-3 w-3" />
+                        {selectedOrder.shipping_address.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Order Items */}
+              <div className="rounded-lg border p-4">
+                <h3 className="font-medium mb-3 flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Order Items ({selectedOrder.items.length})
+                </h3>
+                <div className="space-y-3">
+                  {selectedOrder.items.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 py-2 border-b last:border-0">
+                      <div className="h-14 w-14 rounded-lg bg-muted overflow-hidden flex-shrink-0">
+                        {item.image_url ? (
+                          <img 
+                            src={item.image_url} 
+                            alt={item.product_name}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement
+                              target.style.display = 'none'
+                            }}
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center">
+                            <Package className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{item.product_name}</p>
+                        {item.variant_title && (
+                          <p className="text-xs text-muted-foreground">{item.variant_title}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          SKU: {item.sku || "N/A"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatCurrency(item.price)} × {item.quantity}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">{formatCurrency(item.total)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Order Summary */}
+              <div className="rounded-lg border p-4">
+                <h3 className="font-medium mb-3">Order Summary</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span>{formatCurrency(selectedOrder.subtotal)}</span>
+                  </div>
+                  {selectedOrder.shipping_cost > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Shipping</span>
+                      <span>{formatCurrency(selectedOrder.shipping_cost)}</span>
+                    </div>
+                  )}
+                  {selectedOrder.tax > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tax</span>
+                      <span>{formatCurrency(selectedOrder.tax)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-2 border-t font-medium text-base">
+                    <span>Total</span>
+                    <span>{formatCurrency(selectedOrder.total)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedOrder.notes && (
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium mb-2">Order Notes</h3>
+                  <p className="text-sm text-muted-foreground">{selectedOrder.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

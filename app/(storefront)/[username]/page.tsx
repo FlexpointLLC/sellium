@@ -648,6 +648,7 @@ function ProductCard({
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isAdding, setIsAdding] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
+  const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({})
   const { addItem, removeByProductId, isInCart } = useCart()
   
   // Get all product images - combine images array with image_url fallback
@@ -714,14 +715,26 @@ function ProductCard({
           {productImages.length > 0 ? (
             <>
               {productImages.map((imageUrl, index) => (
-                <img 
-                  key={index}
-                  src={imageUrl} 
-                  alt={`${product.name} ${index + 1}`}
-                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-                    currentImageIndex === index ? "opacity-100" : "opacity-0"
-                  } ${isOutOfStock ? 'grayscale' : ''}`}
-                />
+                imageErrors[index] ? (
+                  <div 
+                    key={index}
+                    className={`absolute inset-0 w-full h-full flex items-center justify-center bg-gray-100 transition-opacity duration-500 ${
+                      currentImageIndex === index ? "opacity-100" : "opacity-0"
+                    }`}
+                  >
+                    <ShoppingBag className="h-12 w-12 text-gray-300" />
+                  </div>
+                ) : (
+                  <img 
+                    key={index}
+                    src={imageUrl} 
+                    alt={`${product.name} ${index + 1}`}
+                    onError={() => setImageErrors(prev => ({ ...prev, [index]: true }))}
+                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+                      currentImageIndex === index ? "opacity-100" : "opacity-0"
+                    } ${isOutOfStock ? 'grayscale' : ''}`}
+                  />
+                )
               ))}
             </>
           ) : (

@@ -129,6 +129,7 @@ function ProductDetailContent({
   const [searchQuery, setSearchQuery] = useState("")
   const { addItem, removeByProductId, isInCart } = useCart()
   const [addToCartHovered, setAddToCartHovered] = useState(false)
+  const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({})
 
   useEffect(() => {
     fetchProduct()
@@ -393,11 +394,12 @@ function ProductDetailContent({
           <div className="space-y-4">
             {/* Main Image */}
             <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
-              {productImages.length > 0 ? (
+              {productImages.length > 0 && !imageErrors[currentImageIndex] ? (
                 <>
                   <img 
                     src={productImages[currentImageIndex]} 
                     alt={product.name}
+                    onError={() => setImageErrors(prev => ({ ...prev, [currentImageIndex]: true }))}
                     className="w-full h-full object-cover"
                   />
                   
@@ -438,7 +440,7 @@ function ProductDetailContent({
                 </>
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <ShoppingCart className="h-24 w-24 text-gray-300" />
+                  <ShoppingBag className="h-24 w-24 text-gray-300" />
                 </div>
               )}
             </div>
@@ -456,7 +458,18 @@ function ProductDetailContent({
                         : 'border-transparent hover:border-gray-300'
                     }`}
                   >
-                    <img src={image} alt={`${product.name} ${index + 1}`} className="w-full h-full object-cover" />
+                    {imageErrors[index] ? (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                        <ShoppingBag className="h-6 w-6 text-gray-300" />
+                      </div>
+                    ) : (
+                      <img 
+                        src={image} 
+                        alt={`${product.name} ${index + 1}`} 
+                        onError={() => setImageErrors(prev => ({ ...prev, [index]: true }))}
+                        className="w-full h-full object-cover" 
+                      />
+                    )}
                   </button>
                 ))}
               </div>

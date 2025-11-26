@@ -555,6 +555,26 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 
 -- ============================================
+-- CUSTOM_DOMAINS TABLE
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.custom_domains (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  store_id UUID REFERENCES public.stores(id) ON DELETE CASCADE NOT NULL,
+  domain TEXT NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'verifying', 'verified', 'failed', 'removed')),
+  ssl_status TEXT DEFAULT 'pending' CHECK (ssl_status IN ('pending', 'provisioning', 'active', 'failed')),
+  verification_token TEXT,
+  dns_configured BOOLEAN DEFAULT FALSE,
+  verified_at TIMESTAMP WITH TIME ZONE,
+  last_checked_at TIMESTAMP WITH TIME ZONE,
+  error_message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(store_id),
+  UNIQUE(domain)
+);
+
+-- ============================================
 -- STORE_SETTINGS TABLE
 -- ============================================
 CREATE TABLE IF NOT EXISTS public.store_settings (
@@ -607,6 +627,7 @@ ALTER TABLE public.payouts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.custom_domains ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.store_settings ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies first (to avoid conflicts)
@@ -637,6 +658,7 @@ DROP POLICY IF EXISTS "Public can view approved reviews" ON public.reviews;
 DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Store owners can manage store settings" ON public.store_settings;
+DROP POLICY IF EXISTS "Store owners can manage custom domains" ON public.custom_domains;
 
 -- Profiles policies
 CREATE POLICY "Users can view their own profile" ON public.profiles
@@ -816,6 +838,16 @@ CREATE POLICY "Store owners can manage store settings" ON public.store_settings
     )
   );
 
+-- Custom domains policies
+CREATE POLICY "Store owners can manage custom domains" ON public.custom_domains
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.stores
+      WHERE stores.id = custom_domains.store_id
+      AND stores.user_id = auth.uid()
+    )
+  );
+
 -- ============================================
 -- FUNCTIONS
 -- ============================================
@@ -967,6 +999,11 @@ CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
 CREATE INDEX IF NOT EXISTS idx_stores_user_id ON public.stores(user_id);
 CREATE INDEX IF NOT EXISTS idx_stores_username ON public.stores(username);
 CREATE INDEX IF NOT EXISTS idx_stores_status ON public.stores(status);
+
+-- Custom domains indexes
+CREATE INDEX IF NOT EXISTS idx_custom_domains_store_id ON public.custom_domains(store_id);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON public.custom_domains(domain);
+CREATE INDEX IF NOT EXISTS idx_custom_domains_status ON public.custom_domains(status);
 
 -- Categories indexes
 CREATE INDEX IF NOT EXISTS idx_categories_store_id ON public.categories(store_id);
