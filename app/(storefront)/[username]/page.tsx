@@ -30,6 +30,8 @@ interface Store {
   favicon_url: string | null
   banner_url: string | null
   banner_images: string[] | null  // Multiple banner images for slider
+  meta_title: string | null
+  meta_description: string | null
   theme_color: string | null
   currency: string  // Currency code (BDT, USD, EUR, etc.)
   social_links: {
@@ -170,6 +172,8 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         favicon_url: storeData.favicon_url || null,
         banner_url: storeData.banner_url || null,
         banner_images: storeData.banner_images || null,
+        meta_title: storeData.meta_title || null,
+        meta_description: storeData.meta_description || null,
         theme_color: storeData.theme_color || "#000000",
         currency: storeData.currency || "BDT",
         social_links: storeData.social_links || null,
@@ -304,6 +308,33 @@ function StorefrontContent({ params }: { params: { username: string } }) {
       document.head.appendChild(link)
     }
   }, [store?.favicon_url])
+
+  // Set custom meta title and description when store is loaded
+  useEffect(() => {
+    if (store) {
+      // Update document title
+      if (store.meta_title) {
+        document.title = store.meta_title
+      } else {
+        document.title = `${store.name} - Sellium`
+      }
+
+      // Update meta description
+      let metaDescription = document.querySelector('meta[name="description"]')
+      if (!metaDescription) {
+        metaDescription = document.createElement('meta')
+        metaDescription.setAttribute('name', 'description')
+        document.head.appendChild(metaDescription)
+      }
+      
+      if (store.meta_description) {
+        metaDescription.setAttribute('content', store.meta_description)
+      } else {
+        metaDescription.setAttribute('content', store.description || `Shop at ${store.name} on Sellium`)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store?.meta_title, store?.meta_description, store?.name, store?.description])
 
   // Auto-slide for banner - only if multiple images
   useEffect(() => {

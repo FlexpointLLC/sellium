@@ -252,6 +252,8 @@ CREATE TABLE IF NOT EXISTS public.stores (
   favicon_url TEXT,
   banner_url TEXT,
   banner_images TEXT[] DEFAULT '{}',
+  meta_title TEXT,
+  meta_description TEXT,
   theme_color TEXT DEFAULT '#22c55e',
   currency TEXT DEFAULT 'USD',
   timezone TEXT DEFAULT 'UTC',

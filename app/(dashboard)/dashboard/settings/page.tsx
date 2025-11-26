@@ -97,6 +97,8 @@ function SettingsPageContent() {
     favicon_url: "",
     banner_url: "",
     banner_images: [] as string[],  // Multiple banner images
+    meta_title: "",
+    meta_description: "",
     theme_color: "#22c55e",
     currency: "BDT",
     timezone: "Asia/Dhaka",
@@ -210,6 +212,8 @@ function SettingsPageContent() {
         favicon_url: storeData.favicon_url || "",
         banner_url: storeData.banner_url || "",
         banner_images: storeData.banner_images || [],
+        meta_title: storeData.meta_title || "",
+        meta_description: storeData.meta_description || "",
         theme_color: storeData.theme_color || "#22c55e",
         currency: storeData.currency || "BDT",
         timezone: storeData.timezone || "Asia/Dhaka",
@@ -439,6 +443,52 @@ function SettingsPageContent() {
     }
   }
 
+  // Delete store logo
+  async function handleDeleteLogo() {
+    if (!store.logo_url || !storeId) return
+
+    try {
+      // Delete from storage
+      const oldPath = store.logo_url.split('/').slice(-2).join('/')
+      await supabase.storage.from('Sellium').remove([`stores/${oldPath}`])
+
+      // Update state and database
+      setStore({ ...store, logo_url: "" })
+      await supabase
+        .from("stores")
+        .update({ logo_url: null })
+        .eq("id", storeId)
+
+      toast.success("Logo deleted successfully")
+    } catch (error) {
+      console.error("Logo delete error:", error)
+      toast.error("Failed to delete logo")
+    }
+  }
+
+  // Delete store favicon
+  async function handleDeleteFavicon() {
+    if (!store.favicon_url || !storeId) return
+
+    try {
+      // Delete from storage
+      const oldPath = store.favicon_url.split('/').slice(-2).join('/')
+      await supabase.storage.from('Sellium').remove([`stores/${oldPath}`])
+
+      // Update state and database
+      setStore({ ...store, favicon_url: "" })
+      await supabase
+        .from("stores")
+        .update({ favicon_url: null })
+        .eq("id", storeId)
+
+      toast.success("Favicon deleted successfully")
+    } catch (error) {
+      console.error("Favicon delete error:", error)
+      toast.error("Failed to delete favicon")
+    }
+  }
+
   // Upload banner image (supports multiple)
   async function handleBannerUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
@@ -528,6 +578,8 @@ function SettingsPageContent() {
         logo_url: store.logo_url,
         favicon_url: store.favicon_url,
         banner_images: store.banner_images,
+        meta_title: store.meta_title || null,
+        meta_description: store.meta_description || null,
         theme_color: store.theme_color,
         currency: store.currency,
         timezone: store.timezone,
@@ -816,9 +868,18 @@ function SettingsPageContent() {
                   <div className="space-y-2">
                     <Label>Store Logo</Label>
                     <div className="flex items-center gap-4">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border">
+                      <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border group">
                         {store.logo_url ? (
-                          <img src={store.logo_url} alt="Logo" className="h-full w-full object-cover" />
+                          <>
+                            <img src={store.logo_url} alt="Logo" className="h-full w-full object-cover" />
+                            <button
+                              onClick={handleDeleteLogo}
+                              className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Delete logo"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </>
                         ) : (
                           <ImageIcon className="h-6 w-6 text-muted-foreground" />
                         )}
@@ -851,9 +912,18 @@ function SettingsPageContent() {
                   <div className="space-y-2">
                     <Label>Store Favicon</Label>
                     <div className="flex items-center gap-4">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border">
+                      <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border group">
                         {store.favicon_url ? (
-                          <img src={store.favicon_url} alt="Favicon" className="h-full w-full object-cover" />
+                          <>
+                            <img src={store.favicon_url} alt="Favicon" className="h-full w-full object-cover" />
+                            <button
+                              onClick={handleDeleteFavicon}
+                              className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Delete favicon"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </>
                         ) : (
                           <ImageIcon className="h-6 w-6 text-muted-foreground" />
                         )}
@@ -965,6 +1035,39 @@ function SettingsPageContent() {
                     value={store.description}
                     onChange={(e) => setStore({ ...store, description: e.target.value })}
                   />
+                </div>
+
+                {/* SEO Meta Tags */}
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">SEO Settings</h3>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Customize how your store appears in search engines and browser tabs
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Page Title</Label>
+                    <Input 
+                      value={store.meta_title} 
+                      onChange={(e) => setStore({ ...store, meta_title: e.target.value })}
+                      placeholder="Sellium - Multi-Vendor Marketplace"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This appears in browser tabs and search results. Leave empty to use default.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Meta Description</Label>
+                    <textarea
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      placeholder="A modern multi-vendor ecommerce platform"
+                      value={store.meta_description}
+                      onChange={(e) => setStore({ ...store, meta_description: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Brief description for search engines. Recommended: 150-160 characters.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Theme Color */}
