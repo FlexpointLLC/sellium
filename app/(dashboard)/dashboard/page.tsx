@@ -65,6 +65,7 @@ export default function DashboardPage() {
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [loading, setLoading] = useState(true)
+  const [customDomain, setCustomDomain] = useState<{ domain: string; status: string } | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -102,6 +103,17 @@ export default function DashboardPage() {
       }
 
       setStore(storeData)
+
+      // Fetch custom domain
+      const { data: domainData } = await supabase
+        .from("custom_domains")
+        .select("domain, status")
+        .eq("store_id", storeData.id)
+        .single()
+
+      if (domainData) {
+        setCustomDomain(domainData)
+      }
 
       // Fetch stats
       const [productsResult, ordersResult, customersResult] = await Promise.all([
@@ -210,10 +222,12 @@ export default function DashboardPage() {
     )
   }
 
-  // In production, use sellium.store/username. In development, use localhost:3000/username
-  const storefrontUrl = process.env.NODE_ENV === 'production' 
-    ? `https://sellium.store/${store.username}`
-    : `http://localhost:3000/${store.username}`
+  // Use custom domain if verified, otherwise use default sellium.store/username
+  const storefrontUrl = customDomain?.status === 'verified'
+    ? `https://${customDomain.domain}`
+    : process.env.NODE_ENV === 'production' 
+      ? `https://sellium.store/${store.username}`
+      : `http://localhost:3000/${store.username}`
   const planInfo = planLimits[store.plan] || planLimits.free
   const statusColor = store.status === "active" ? "text-green-600 bg-green-500/10" : "text-yellow-600 bg-yellow-500/10"
 
@@ -278,10 +292,10 @@ export default function DashboardPage() {
                     target="_blank"
                     className="text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    sellium.store/{store.username}
+                    {customDomain?.status === 'verified' ? customDomain.domain : `sellium.store/${store.username}`}
                   </Link>
                   <ArrowSquareOut className="h-3.5 w-3.5 text-muted-foreground" />
-                  <Link href="/dashboard/settings/domain" className="text-primary hover:underline">
+                  <Link href="/dashboard/settings?tab=domain" className="text-primary hover:underline">
                     Manage Domain
                   </Link>
                 </div>
