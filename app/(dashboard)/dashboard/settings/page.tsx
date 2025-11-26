@@ -539,7 +539,7 @@ function SettingsPageContent() {
     return `sellium-verify-${storeId?.slice(0, 8)}-${Date.now().toString(36)}`
   }
 
-  // Add custom domain
+  // Add custom domain via Vercel API
   async function handleAddDomain() {
     if (!storeId || !domainInput.trim()) return
 
@@ -552,117 +552,131 @@ function SettingsPageContent() {
 
     setVerifyingDomain(true)
 
-    const verificationToken = generateVerificationToken()
-
-    const { data, error } = await supabase
-      .from("custom_domains")
-      .insert({
-        store_id: storeId,
-        domain: domainInput.trim().toLowerCase(),
-        status: "pending",
-        ssl_status: "pending",
-        verification_token: verificationToken
+    try {
+      const response = await fetch("/api/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domain: domainInput.trim().toLowerCase(),
+          storeId: storeId
+        })
       })
-      .select()
-      .single()
 
-    if (error) {
-      console.error("Error adding domain:", error)
-      if (error.code === "23505") {
-        toast.error("This domain is already in use")
-      } else {
-        toast.error(error.message || "Failed to add domain")
+      const data = await response.json()
+
+      if (!response.ok) {
+        toast.error(data.error || "Failed to add domain")
+        setVerifyingDomain(false)
+        return
       }
-      setVerifyingDomain(false)
-      return
-    }
 
-    setCustomDomain({
-      id: data.id,
-      domain: data.domain,
-      status: "pending",
-      ssl_status: "pending",
-      verification_token: verificationToken,
-      dns_configured: false
-    })
-    setDomainInput("")
-    setVerifyingDomain(false)
-    toast.success("Domain added! Please configure DNS records.")
+      setCustomDomain({
+        id: data.domain.id,
+        domain: data.domain.domain,
+        status: data.domain.status,
+        ssl_status: data.domain.ssl_status,
+        verification_token: data.domain.verification_token,
+        dns_configured: data.domain.dns_configured
+      })
+      setDomainInput("")
+      setVerifyingDomain(false)
+      
+      if (data.vercel?.verified) {
+        toast.success("Domain added and verified!")
+      } else {
+        toast.success("Domain added to Vercel! Please configure DNS records.")
+      }
+    } catch (error) {
+      console.error("Error adding domain:", error)
+      toast.error("Failed to add domain")
+      setVerifyingDomain(false)
+    }
   }
 
-  // Verify DNS configuration
+  // Verify DNS configuration via Vercel API
   async function handleVerifyDomain() {
-    if (!customDomain.id) return
+    if (!customDomain.domain || !storeId) return
 
     setVerifyingDomain(true)
 
-    // Update status to verifying
-    await supabase
-      .from("custom_domains")
-      .update({ 
-        status: "verifying",
-        last_checked_at: new Date().toISOString()
-      })
-      .eq("id", customDomain.id)
+    // Update UI to show verifying state
+    setCustomDomain({
+      ...customDomain,
+      status: "verifying"
+    })
 
-    // In a real implementation, you would:
-    // 1. Call Vercel API to add the domain
-    // 2. Check DNS records
-    // 3. Provision SSL certificate
-    
-    // For now, we'll simulate the verification process
-    // In production, this would be a server-side API call to Vercel
-    
-    setTimeout(async () => {
-      // Simulate successful verification
-      const { error } = await supabase
-        .from("custom_domains")
-        .update({ 
-          status: "verified",
-          ssl_status: "active",
-          dns_configured: true,
-          verified_at: new Date().toISOString(),
-          last_checked_at: new Date().toISOString()
+    try {
+      const response = await fetch(
+        `/api/domains?domain=${encodeURIComponent(customDomain.domain)}&storeId=${storeId}`
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        toast.error(data.error || "Failed to verify domain")
+        setCustomDomain({
+          ...customDomain,
+          status: "pending"
         })
-        .eq("id", customDomain.id)
-
-      if (error) {
-        toast.error("Failed to update domain status")
         setVerifyingDomain(false)
         return
       }
 
       setCustomDomain({
         ...customDomain,
-        status: "verified",
-        ssl_status: "active",
-        dns_configured: true
+        status: data.status,
+        ssl_status: data.ssl_status,
+        dns_configured: data.verified
       })
+
+      if (data.verified) {
+        toast.success("Domain verified successfully! SSL certificate is active.")
+      } else {
+        toast.info("DNS not configured yet. Please add the DNS records and try again.")
+        setCustomDomain({
+          ...customDomain,
+          status: "pending"
+        })
+      }
+    } catch (error) {
+      console.error("Error verifying domain:", error)
+      toast.error("Failed to verify domain")
+      setCustomDomain({
+        ...customDomain,
+        status: "pending"
+      })
+    } finally {
       setVerifyingDomain(false)
-      toast.success("Domain verified successfully!")
-    }, 2000)
+    }
   }
 
-  // Remove custom domain
+  // Remove custom domain via Vercel API
   async function handleRemoveDomain() {
-    if (!customDomain.id) return
+    if (!customDomain.domain || !storeId) return
 
-    const { error } = await supabase
-      .from("custom_domains")
-      .delete()
-      .eq("id", customDomain.id)
+    try {
+      const response = await fetch(
+        `/api/domains?domain=${encodeURIComponent(customDomain.domain)}&storeId=${storeId}`,
+        { method: "DELETE" }
+      )
 
-    if (error) {
+      const data = await response.json()
+
+      if (!response.ok) {
+        toast.error(data.error || "Failed to remove domain")
+        return
+      }
+
+      setCustomDomain({
+        domain: "",
+        status: "not_configured",
+        ssl_status: "pending"
+      })
+      toast.success("Domain removed from Vercel successfully")
+    } catch (error) {
+      console.error("Error removing domain:", error)
       toast.error("Failed to remove domain")
-      return
     }
-
-    setCustomDomain({
-      domain: "",
-      status: "not_configured",
-      ssl_status: "pending"
-    })
-    toast.success("Domain removed successfully")
   }
 
   const tabs = [
