@@ -134,6 +134,22 @@ export default function SupportPage() {
     category: ""
   })
 
+  async function fetchTickets(storeId: string) {
+    setLoadingTickets(true)
+    const { data, error } = await supabase
+      .from("support_tickets")
+      .select("*")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      toast.error("Failed to load tickets")
+    } else {
+      setTickets(data || [])
+    }
+    setLoadingTickets(false)
+  }
+
   useEffect(() => {
     async function fetchData() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -159,23 +175,8 @@ export default function SupportPage() {
     }
 
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, supabase])
-
-  async function fetchTickets(storeId: string) {
-    setLoadingTickets(true)
-    const { data, error } = await supabase
-      .from("support_tickets")
-      .select("*")
-      .eq("store_id", storeId)
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      toast.error("Failed to load tickets")
-    } else {
-      setTickets(data || [])
-    }
-    setLoadingTickets(false)
-  }
 
   async function handleSaveLinquo() {
     if (!storeId || !linquoOrgId.trim()) return
@@ -520,7 +521,7 @@ export default function SupportPage() {
           <DialogHeader>
             <DialogTitle>Create New Support Ticket</DialogTitle>
             <DialogDescription>
-              Describe your issue and we'll get back to you as soon as possible.
+              Describe your issue and we&apos;ll get back to you as soon as possible.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
