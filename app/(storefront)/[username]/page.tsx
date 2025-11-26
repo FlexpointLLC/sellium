@@ -66,7 +66,9 @@ interface Category {
   name: string
   slug: string
   image_url: string | null
+  parent_id: string | null
   product_count?: number
+  children?: Category[]
 }
 
 interface Product {
@@ -83,6 +85,7 @@ interface Product {
   stock: number | null  // Stock quantity
   daily_sales?: number  // Number of sales today
   is_hot?: boolean  // Hot badge if daily_sales > 10
+  has_variants?: boolean  // Whether product has variants
 }
 
 interface BannerSlide {
@@ -180,13 +183,22 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         .order("sort_order", { ascending: true })
 
       if (categoriesData) {
-        // Get product count for each category
+        // Get product count for each category (including subcategory products for parent categories)
         const categoriesWithCount = await Promise.all(
           categoriesData.map(async (cat) => {
+            // Find all child category IDs for this category
+            const childCategoryIds = categoriesData
+              .filter(c => c.parent_id === cat.id)
+              .map(c => c.id)
+            
+            // Include this category and all its children
+            const allCategoryIds = [cat.id, ...childCategoryIds]
+            
+            // Count products in this category and all subcategories
             const { count } = await supabase
               .from("products")
               .select("*", { count: "exact", head: true })
-              .eq("category_id", cat.id)
+              .in("category_id", allCategoryIds)
               .eq("status", "active")
             
             return {
@@ -194,6 +206,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
               name: cat.name,
               slug: cat.slug,
               image_url: cat.image_url || null,
+              parent_id: cat.parent_id || null,
               product_count: count || 0
             }
           })
@@ -213,20 +226,40 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         .order("created_at", { ascending: false })
 
       if (productsData && productsData.length > 0) {
-        const formattedProducts = productsData.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          slug: p.slug,
-          price: p.price,
-          compare_at_price: p.compare_at_price,
-          image_url: p.image_url || null,
-          images: p.images || null,  // Include multiple images
-          description: p.description || null,
-          category_id: p.category_id,
-          category: p.category,
-          stock: p.stock !== undefined && p.stock !== null ? p.stock : 0,  // Stock quantity
-          daily_sales: p.daily_sales || 0,
-          is_hot: (p.daily_sales || 0) > 10  // Hot if more than 10 sales today
+        // For products with variants, fetch variant stocks
+        const formattedProducts = await Promise.all(productsData.map(async (p: any) => {
+          let totalStock = p.stock !== undefined && p.stock !== null ? p.stock : 0
+          let hasVariants = p.has_variants || false
+          
+          // Always check for variants (in case has_variants flag is incorrect)
+          const { data: variants } = await supabase
+            .from("product_variants")
+            .select("stock, enabled")
+            .eq("product_id", p.id)
+            .eq("enabled", true)
+          
+          if (variants && variants.length > 0) {
+            // Product has variants - calculate total stock from enabled variants
+            hasVariants = true
+            totalStock = variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0)
+          }
+          
+          return {
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            price: p.price,
+            compare_at_price: p.compare_at_price,
+            image_url: p.image_url || null,
+            images: p.images || null,  // Include multiple images
+            description: p.description || null,
+            category_id: p.category_id,
+            category: p.category,
+            stock: totalStock,  // Stock quantity (from variants if applicable)
+            daily_sales: p.daily_sales || 0,
+            is_hot: (p.daily_sales || 0) > 10,  // Hot if more than 10 sales today
+            has_variants: hasVariants
+          }
         }))
         setProducts(formattedProducts)
 
@@ -392,8 +425,8 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         )
       })()}
 
-      {/* Browse Categories */}
-      {categories.length > 0 && (
+      {/* Browse Categories - Only show parent categories */}
+      {categories.filter(c => !c.parent_id).length > 0 && (
         <section className="py-10 px-4">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center gap-4 mb-6">
@@ -401,7 +434,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
               <div className="flex-1 h-px bg-black/10" />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {categories.map((category) => (
+              {categories.filter(c => !c.parent_id).map((category) => (
                 <Link
                   key={category.id}
                   href={getUrl(`/category/${category.slug}`)}
@@ -684,7 +717,9 @@ function ProductCard({
   const discountPercent = hasDiscount 
     ? Math.round(((product.compare_at_price! - product.price) / product.compare_at_price!) * 100)
     : 0
-  const isOutOfStock = product.stock === null || product.stock === undefined || product.stock <= 0
+  // For products with variants, don't show out of stock on the card - let user view variants
+  // Only show out of stock for simple products (no variants) with 0 or less stock
+  const isOutOfStock = !product.has_variants && product.stock !== null && product.stock !== undefined && product.stock <= 0
   const inCart = isInCart(product.id)
 
   const handleCartClick = (e: React.MouseEvent) => {

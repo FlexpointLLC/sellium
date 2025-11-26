@@ -31,6 +31,12 @@ interface Product {
   images: string[] | null
   stock: number
   daily_sales: number | null
+  category_id: string | null
+}
+
+interface ProductsBySubcategory {
+  category: Category
+  products: Product[]
 }
 
 interface Category {
@@ -39,6 +45,8 @@ interface Category {
   slug: string
   description: string | null
   image_url: string | null
+  parent_id?: string | null
+  children?: Category[]
 }
 
 interface Store {
@@ -80,7 +88,7 @@ function formatPrice(price: number, currency: string): string {
 export default function CategoryPage({
   params,
 }: {
-  params: { username: string; slug: string }
+  params: { username: string; slug: string[] }
 }) {
   return (
     <CartProvider storeUsername={params.username}>
@@ -92,18 +100,28 @@ export default function CategoryPage({
 function CategoryContent({
   params,
 }: {
-  params: { username: string; slug: string }
+  params: { username: string; slug: string[] }
 }) {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [store, setStore] = useState<Store | null>(null)
   const [category, setCategory] = useState<Category | null>(null)
+  const [parentCategory, setParentCategory] = useState<Category | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [productsBySubcategory, setProductsBySubcategory] = useState<ProductsBySubcategory[]>([])
+  const [isParentCategory, setIsParentCategory] = useState(false)
   const [sortBy, setSortBy] = useState("newest")
   const [searchQuery, setSearchQuery] = useState("")
   const [error, setError] = useState(false)
   const { getUrl } = useStorefrontUrl(params.username)
+  
+  // Parse the slug array - can be [parent] or [parent, child]
+  const slugParts = params.slug
+  const isNestedCategory = slugParts.length > 1
+  const parentSlug = slugParts[0]
+  const childSlug = isNestedCategory ? slugParts[1] : null
+  const currentSlug = childSlug || parentSlug
   
   // Quick View Modal state
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
@@ -141,7 +159,7 @@ function CategoryContent({
     // Fetch all categories for navigation
     const { data: categoriesData } = await supabase
       .from("categories")
-      .select("id, name, slug, description, image_url")
+      .select("id, name, slug, description, image_url, parent_id")
       .eq("store_id", storeData.id)
       .eq("status", "active")
       .order("sort_order", { ascending: true })
@@ -150,8 +168,27 @@ function CategoryContent({
       setCategories(categoriesData)
     }
 
-    // Find the current category
-    const currentCategory = categoriesData?.find(c => c.slug === params.slug)
+    // Find the current category based on URL structure
+    let currentCategory: Category | null = null
+    let foundParentCategory: Category | null = null
+
+    if (isNestedCategory && childSlug) {
+      // Nested category: /category/parent-slug/child-slug
+      foundParentCategory = categoriesData?.find(c => c.slug === parentSlug) || null
+      if (foundParentCategory) {
+        currentCategory = categoriesData?.find(c => 
+          c.slug === childSlug && c.parent_id === foundParentCategory!.id
+        ) || null
+      }
+    } else {
+      // Single category: /category/slug
+      currentCategory = categoriesData?.find(c => c.slug === parentSlug) || null
+      // Check if this category has a parent
+      if (currentCategory?.parent_id) {
+        foundParentCategory = categoriesData?.find(c => c.id === currentCategory!.parent_id) || null
+      }
+    }
+
     if (!currentCategory) {
       setError(true)
       setLoading(false)
@@ -159,16 +196,63 @@ function CategoryContent({
     }
 
     setCategory(currentCategory)
+    setParentCategory(foundParentCategory)
 
-    // Fetch products for this category
-    const { data: productsData } = await supabase
-      .from("products")
-      .select("*")
-      .eq("store_id", storeData.id)
-      .eq("category_id", currentCategory.id)
+    // Check if this category has children (is a parent category)
+    const childCategories = categoriesData?.filter(c => c.parent_id === currentCategory.id) || []
+    const hasChildren = childCategories.length > 0
+    setIsParentCategory(hasChildren)
 
-    if (productsData) {
-      setProducts(productsData)
+    if (hasChildren) {
+      // This is a parent category - fetch products from parent AND all subcategories
+      const allCategoryIds = [currentCategory.id, ...childCategories.map(c => c.id)]
+      
+      const { data: productsData } = await supabase
+        .from("products")
+        .select("*")
+        .eq("store_id", storeData.id)
+        .in("category_id", allCategoryIds)
+
+      if (productsData) {
+        setProducts(productsData)
+        
+        // Group products by subcategory
+        const grouped: ProductsBySubcategory[] = []
+        
+        // First, add products directly in parent category (if any)
+        const parentProducts = productsData.filter(p => p.category_id === currentCategory.id)
+        if (parentProducts.length > 0) {
+          grouped.push({
+            category: currentCategory,
+            products: parentProducts
+          })
+        }
+        
+        // Then add products from each subcategory
+        childCategories.forEach(subcat => {
+          const subcatProducts = productsData.filter(p => p.category_id === subcat.id)
+          if (subcatProducts.length > 0) {
+            grouped.push({
+              category: subcat,
+              products: subcatProducts
+            })
+          }
+        })
+        
+        setProductsBySubcategory(grouped)
+      }
+    } else {
+      // Regular category (no children) - fetch only its products
+      const { data: productsData } = await supabase
+        .from("products")
+        .select("*")
+        .eq("store_id", storeData.id)
+        .eq("category_id", currentCategory.id)
+
+      if (productsData) {
+        setProducts(productsData)
+      }
+      setProductsBySubcategory([])
     }
 
     setLoading(false)
@@ -232,7 +316,7 @@ function CategoryContent({
         username={params.username}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        currentCategorySlug={params.slug}
+        currentCategorySlug={currentSlug}
       />
 
       {/* Breadcrumb */}
@@ -241,7 +325,20 @@ function CategoryContent({
           <nav className="flex items-center gap-2 text-sm text-gray-500">
             <Link href={getUrl()} className="hover:text-gray-900">Home</Link>
             <span>/</span>
-            <span className="text-gray-900">{category.name}</span>
+            {parentCategory ? (
+              <>
+                <Link 
+                  href={getUrl(`/category/${parentCategory.slug}`)} 
+                  className="hover:text-gray-900"
+                >
+                  {parentCategory.name}
+                </Link>
+                <span>/</span>
+                <span className="text-gray-900">{category.name}</span>
+              </>
+            ) : (
+              <span className="text-gray-900">{category.name}</span>
+            )}
           </nav>
         </div>
       </div>
@@ -292,7 +389,63 @@ function CategoryContent({
               Browse all products
             </Link>
           </div>
+        ) : isParentCategory && productsBySubcategory.length > 0 ? (
+          // Parent category view - show products grouped by subcategory
+          <div className="space-y-12">
+            {productsBySubcategory.map((group) => {
+              // Filter and sort products for this group
+              const groupProducts = group.products
+                .filter(product => product.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                .sort((a, b) => {
+                  switch (sortBy) {
+                    case "price-low": return a.price - b.price
+                    case "price-high": return b.price - a.price
+                    case "name-az": return a.name.localeCompare(b.name)
+                    case "name-za": return b.name.localeCompare(a.name)
+                    default: return 0
+                  }
+                })
+              
+              if (groupProducts.length === 0) return null
+              
+              return (
+                <div key={group.category.id}>
+                  {/* Subcategory Title */}
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-xl font-bold text-gray-900">{group.category.name}</h2>
+                      <span className="text-sm text-gray-500">({groupProducts.length} products)</span>
+                    </div>
+                    {group.category.id !== category?.id && (
+                      <Link
+                        href={getUrl(`/category/${category?.slug}/${group.category.slug}`)}
+                        className="text-sm font-medium hover:underline"
+                        style={{ color: themeColor }}
+                      >
+                        View All →
+                      </Link>
+                    )}
+                  </div>
+                  
+                  {/* Products Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {groupProducts.map((product) => (
+                      <ProductCard 
+                        key={product.id} 
+                        product={product} 
+                        username={params.username}
+                        themeColor={themeColor}
+                        onQuickView={handleQuickView}
+                        getUrl={getUrl}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         ) : (
+          // Regular category view - simple grid
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {filteredProducts.map((product) => (
               <ProductCard 

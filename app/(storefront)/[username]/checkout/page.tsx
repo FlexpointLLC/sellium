@@ -51,6 +51,8 @@ interface Category {
   id: string
   name: string
   slug: string
+  parent_id?: string | null
+  children?: Category[]
 }
 
 // Currency symbols mapping
@@ -127,16 +129,19 @@ function CheckoutContent({ params }: { params: { username: string } }) {
       currency: storeData.currency || "BDT"
     })
 
-    // Fetch categories for navigation
+    // Fetch categories for navigation (include parent_id for nested dropdowns)
     const { data: categoriesData } = await supabase
       .from("categories")
-      .select("id, name, slug")
+      .select("id, name, slug, parent_id")
       .eq("store_id", storeData.id)
       .eq("status", "active")
       .order("sort_order", { ascending: true })
 
     if (categoriesData) {
-      setCategories(categoriesData)
+      setCategories(categoriesData.map(cat => ({
+        ...cat,
+        parent_id: cat.parent_id || null
+      })))
     }
 
     setLoading(false)
@@ -280,18 +285,35 @@ function CheckoutContent({ params }: { params: { username: string } }) {
           // Reduce variant stock
           const { data: variant } = await supabase
             .from("product_variants")
-            .select("stock")
+            .select("stock, product_id")
             .eq("id", item.variantId)
             .single()
           
           if (variant) {
+            // Update variant stock
             await supabase
               .from("product_variants")
               .update({ stock: Math.max(0, (variant.stock || 0) - item.quantity) })
               .eq("id", item.variantId)
+            
+            // Also update main product stock (combined stock from all variants)
+            // Recalculate total stock from all enabled variants
+            const { data: allVariants } = await supabase
+              .from("product_variants")
+              .select("stock")
+              .eq("product_id", item.productId)
+              .eq("enabled", true)
+            
+            if (allVariants) {
+              const totalStock = allVariants.reduce((sum, v) => sum + (v.stock || 0), 0)
+              await supabase
+                .from("products")
+                .update({ stock: totalStock })
+                .eq("id", item.productId)
+            }
           }
         } else {
-          // Reduce product stock
+          // Reduce product stock (simple product without variants)
           const { data: product } = await supabase
             .from("products")
             .select("stock")

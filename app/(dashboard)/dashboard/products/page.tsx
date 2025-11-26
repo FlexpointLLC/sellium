@@ -29,6 +29,16 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
+} from "@/components/ui/dropdown-menu"
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -59,6 +69,8 @@ interface Product {
 interface Category {
   id: string
   name: string
+  parent_id: string | null
+  children?: Category[]
 }
 
 interface VariantTemplate {
@@ -89,6 +101,101 @@ interface ProductVariant {
 interface Store {
   id: string
   username: string
+}
+
+// Cascading Category Dropdown Component
+function CategoryDropdown({ 
+  categories, 
+  value, 
+  onChange 
+}: { 
+  categories: Category[]
+  value: string
+  onChange: (value: string) => void 
+}) {
+  const [open, setOpen] = useState(false)
+  
+  // Build category tree
+  const rootCategories = categories.filter(c => !c.parent_id)
+  const getChildren = (parentId: string) => categories.filter(c => c.parent_id === parentId)
+  
+  // Get selected category name
+  const selectedCategory = categories.find(c => c.id === value)
+  const selectedParent = selectedCategory?.parent_id 
+    ? categories.find(c => c.id === selectedCategory.parent_id)
+    : null
+  
+  const displayName = selectedCategory 
+    ? (selectedParent ? `${selectedParent.name} › ${selectedCategory.name}` : selectedCategory.name)
+    : null
+
+  const handleSelect = (categoryId: string) => {
+    onChange(categoryId)
+    setOpen(false)
+  }
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button 
+          variant="outline" 
+          className="w-full justify-between font-normal px-3"
+          type="button"
+        >
+          <span className={`truncate flex-1 text-left ${displayName ? "text-foreground" : "text-muted-foreground"}`}>
+            {displayName || "Select category"}
+          </span>
+          <CaretRight className="h-4 w-4 opacity-50 rotate-90 ml-2 flex-shrink-0" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56">
+        {rootCategories.map((cat) => {
+          const children = getChildren(cat.id)
+          const hasChildren = children.length > 0
+          
+          if (hasChildren) {
+            return (
+              <DropdownMenuSub key={cat.id}>
+                <DropdownMenuSubTrigger className="flex items-center justify-between">
+                  <span>{cat.name}</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent className="w-48">
+                    {/* Option to select the parent category itself */}
+                    <DropdownMenuItem 
+                      onClick={() => handleSelect(cat.id)}
+                      className="font-medium"
+                    >
+                      All {cat.name}
+                    </DropdownMenuItem>
+                    <div className="h-px bg-border my-1" />
+                    {/* Child categories */}
+                    {children.map((child) => (
+                      <DropdownMenuItem 
+                        key={child.id}
+                        onClick={() => handleSelect(child.id)}
+                      >
+                        {child.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+            )
+          }
+          
+          return (
+            <DropdownMenuItem 
+              key={cat.id}
+              onClick={() => handleSelect(cat.id)}
+            >
+              {cat.name}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 export default function ProductsPage() {
@@ -203,12 +310,12 @@ export default function ProductsPage() {
       setProducts(productsWithStock)
     }
 
-    // Fetch categories
+    // Fetch categories with parent_id for nested display
     const { data: categoriesData } = await supabase
       .from("categories")
-      .select("id, name")
+      .select("id, name, parent_id")
       .eq("store_id", storeData.id)
-      .order("name")
+      .order("sort_order", { ascending: true })
 
     if (categoriesData) {
       setCategories(categoriesData)
@@ -653,6 +760,11 @@ export default function ProductsPage() {
       if (existingProduct) {
         // SKU exists - check if name and slug match
         if (existingProduct.name === formData.name.trim() && existingProduct.slug === productSlug) {
+          // Calculate stock from variants if applicable
+          const combinedStock = formData.has_variants 
+            ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (parseInt(String(v.stock)) || 0), 0)
+            : parseInt(formData.stock) || 0
+
           // Same SKU, same name/slug - UPDATE existing product
           const productData = {
             name: formData.name.trim(),
@@ -661,7 +773,7 @@ export default function ProductsPage() {
             price: parseFloat(formData.price) || 0,
             compare_at_price: formData.compare_at_price ? parseFloat(formData.compare_at_price) : null,
             sku: sku,
-            stock: parseInt(formData.stock) || 0,
+            stock: combinedStock,
             status: formData.status,
             category_id: formData.category_id || null,
             has_variants: formData.has_variants,
@@ -715,8 +827,16 @@ export default function ProductsPage() {
 
           // Calculate total stock from variants if has_variants
           const totalStock = formData.has_variants 
-            ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (v.stock || 0), 0)
+            ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (parseInt(String(v.stock)) || 0), 0)
             : parseInt(formData.stock) || 0
+
+          // Update the product's stock in database with combined variant stock
+          if (formData.has_variants) {
+            await supabase
+              .from("products")
+              .update({ stock: totalStock })
+              .eq("id", existingProduct.id)
+          }
 
           // Update local state - replace existing product
           setProducts(products.map(p =>
@@ -737,6 +857,11 @@ export default function ProductsPage() {
       }
     }
     
+    // Calculate initial stock - for products with variants, we'll update after saving variants
+    const initialStock = formData.has_variants 
+      ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (parseInt(String(v.stock)) || 0), 0)
+      : parseInt(formData.stock) || 0
+
     // No existing SKU or no SKU provided - create new product
     const productData = {
       store_id: store.id,
@@ -746,7 +871,7 @@ export default function ProductsPage() {
       price: parseFloat(formData.price) || 0,
       compare_at_price: formData.compare_at_price ? parseFloat(formData.compare_at_price) : null,
       sku: sku,
-      stock: parseInt(formData.stock) || 0,
+      stock: initialStock,
       status: formData.status,
       category_id: formData.category_id || null,
       has_variants: formData.has_variants,
@@ -809,8 +934,16 @@ export default function ProductsPage() {
 
     // Calculate total stock from variants if has_variants
     const totalStock = formData.has_variants 
-      ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (v.stock || 0), 0)
+      ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (parseInt(String(v.stock)) || 0), 0)
       : parseInt(formData.stock) || 0
+
+    // Update the product's stock in database with combined variant stock
+    if (formData.has_variants && totalStock !== (parseInt(formData.stock) || 0)) {
+      await supabase
+        .from("products")
+        .update({ stock: totalStock })
+        .eq("id", data.id)
+    }
 
     // Delete any removed images from storage
     if (imagesToDelete.length > 0) {
@@ -968,6 +1101,11 @@ export default function ProductsPage() {
     }
     const imageUrl = allImages.length > 0 ? allImages[0] : null
 
+    // Calculate combined stock from variants if applicable
+    const combinedStock = formData.has_variants 
+      ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (parseInt(String(v.stock)) || 0), 0)
+      : parseInt(formData.stock) || 0
+
     const productData = {
       name: formData.name.trim(),
       slug: productSlug,
@@ -975,7 +1113,7 @@ export default function ProductsPage() {
       price: parseFloat(formData.price) || 0,
       compare_at_price: formData.compare_at_price ? parseFloat(formData.compare_at_price) : null,
       sku: formData.sku.trim() || null,
-      stock: parseInt(formData.stock) || 0,
+      stock: combinedStock,
       status: formData.status,
       category_id: formData.category_id || null,
       has_variants: formData.has_variants,
@@ -1049,8 +1187,16 @@ export default function ProductsPage() {
 
     // Calculate total stock from variants if has_variants
     const totalStock = formData.has_variants 
-      ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (v.stock || 0), 0)
+      ? generatedVariants.filter(v => v.enabled).reduce((sum, v) => sum + (parseInt(String(v.stock)) || 0), 0)
       : parseInt(formData.stock) || 0
+
+    // Update the product's stock in database with combined variant stock
+    if (formData.has_variants) {
+      await supabase
+        .from("products")
+        .update({ stock: totalStock })
+        .eq("id", selectedProduct.id)
+    }
 
     // Delete any removed images from storage
     if (imagesToDelete.length > 0) {
@@ -1589,19 +1735,11 @@ export default function ProductsPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor={`${idPrefix}category`}>Category</Label>
-            <Select
+            <CategoryDropdown 
+              categories={categories}
               value={formData.category_id}
-              onValueChange={(value) => setFormData({ ...formData, category_id: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(value) => setFormData({ ...formData, category_id: value })}
+            />
           </div>
         </div>
 

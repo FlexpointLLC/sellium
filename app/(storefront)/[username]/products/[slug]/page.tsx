@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { notFound } from "next/navigation"
 import Link from "next/link"
@@ -97,6 +98,8 @@ interface Category {
   id: string
   name: string
   slug: string
+  parent_id?: string | null
+  children?: Category[]
 }
 
 export default function ProductDetailPage({ 
@@ -157,16 +160,19 @@ function ProductDetailContent({
       currency: storeData.currency || "BDT"
     })
 
-    // Fetch categories for this store
+    // Fetch categories for this store (include parent_id for nested dropdowns)
     const { data: categoriesData } = await supabase
       .from("categories")
-      .select("id, name, slug")
+      .select("id, name, slug, parent_id")
       .eq("store_id", storeData.id)
       .eq("status", "active")
       .order("sort_order", { ascending: true })
 
     if (categoriesData) {
-      setCategories(categoriesData)
+      setCategories(categoriesData.map(cat => ({
+        ...cat,
+        parent_id: cat.parent_id || null
+      })))
     }
 
     // Fetch product by slug
@@ -230,19 +236,19 @@ function ProductDetailContent({
     setProduct(foundProduct)
       
     // Fetch variants if product has variants
-    if (foundProduct.has_variants) {
-      const { data: variantsData } = await supabase
-        .from("product_variants")
-        .select("*")
-        .eq("product_id", foundProduct.id)
-        .eq("enabled", true)
+    // Also check for variants even if has_variants is false (in case of data inconsistency)
+    const { data: variantsData } = await supabase
+      .from("product_variants")
+      .select("*")
+      .eq("product_id", foundProduct.id)
+      .eq("enabled", true)
+      .order("created_at", { ascending: true })
 
-      if (variantsData && variantsData.length > 0) {
-        setVariants(variantsData)
-        // Select first variant by default
-        setSelectedVariant(variantsData[0])
-        setSelectedOptions(variantsData[0].options || {})
-      }
+    if (variantsData && variantsData.length > 0) {
+      setVariants(variantsData)
+      // Select first variant by default
+      setSelectedVariant(variantsData[0])
+      setSelectedOptions(variantsData[0].options || {})
     }
 
     setLoading(false)
@@ -307,6 +313,8 @@ function ProductDetailContent({
   // Cart state
   const productInCart = isInCart(product?.id || "", selectedVariant?.id)
 
+  const router = useRouter()
+
   const handleAddToCart = () => {
     if (!product || isOutOfStock) return
 
@@ -330,6 +338,29 @@ function ProductDetailContent({
       })
       toast.success(`${product.name} added to cart`)
     }
+  }
+
+  const handleBuyNow = () => {
+    if (!product || isOutOfStock) return
+
+    // Add to cart if not already in cart
+    if (!productInCart) {
+      addItem({
+        productId: product.id,
+        variantId: selectedVariant?.id,
+        name: product.name,
+        variantTitle: selectedVariant?.title,
+        price: currentPrice,
+        compareAtPrice: currentComparePrice || undefined,
+        quantity: quantity,
+        image: productImages[0] || null,
+        stock: currentStock,
+        sku: selectedVariant?.sku || product.sku || undefined
+      })
+    }
+
+    // Navigate to checkout
+    router.push(getUrl('/checkout'))
   }
 
   if (loading) {
@@ -634,6 +665,7 @@ function ProductDetailContent({
                 )}
               </Button>
               <button
+                onClick={handleBuyNow}
                 className="flex-1 h-12 text-base font-medium border-2 rounded-md transition-colors hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ borderColor: themeColor, color: themeColor }}
                 disabled={isOutOfStock}

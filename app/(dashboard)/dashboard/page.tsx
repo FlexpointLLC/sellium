@@ -256,10 +256,14 @@ export default function DashboardPage() {
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row gap-6">
             {/* Store Preview Thumbnail */}
-            <div className="w-full md:w-48 h-32 md:h-auto rounded-lg overflow-hidden border bg-muted flex-shrink-0">
-              <div className="w-full h-full bg-gradient-to-br from-muted to-muted-foreground/10 flex items-center justify-center text-muted-foreground text-xs">
-                Store Preview
-              </div>
+            <div className="w-full md:w-48 h-[103px] rounded-lg overflow-hidden border bg-muted flex-shrink-0 relative group">
+              <iframe
+                src={storefrontUrl}
+                className="absolute top-0 left-0 w-[400%] h-[412px] origin-top-left scale-[0.25] pointer-events-none"
+                title="Store Preview"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-transparent group-hover:bg-black/5 transition-colors" />
             </div>
 
             {/* Store Info */}

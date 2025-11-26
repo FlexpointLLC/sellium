@@ -45,6 +45,8 @@ interface Category {
   id: string
   name: string
   slug: string
+  parent_id?: string | null
+  children?: Category[]
 }
 
 // Currency symbols mapping
@@ -103,16 +105,19 @@ function CartContent({ params }: { params: { username: string } }) {
       currency: storeData.currency || "BDT"
     })
 
-    // Fetch categories for navigation
+    // Fetch categories for navigation (include parent_id for nested dropdowns)
     const { data: categoriesData } = await supabase
       .from("categories")
-      .select("id, name, slug")
+      .select("id, name, slug, parent_id")
       .eq("store_id", storeData.id)
       .eq("status", "active")
       .order("sort_order", { ascending: true })
 
     if (categoriesData) {
-      setCategories(categoriesData)
+      setCategories(categoriesData.map(cat => ({
+        ...cat,
+        parent_id: cat.parent_id || null
+      })))
     }
 
     setLoading(false)
