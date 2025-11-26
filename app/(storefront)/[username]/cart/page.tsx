@@ -18,6 +18,7 @@ import { StorefrontHeader } from "@/components/storefront/header"
 import { StorefrontFooter } from "@/components/storefront/footer"
 import { FloatingButtons } from "@/components/storefront/floating-buttons"
 import { useStorefrontUrl } from "@/lib/use-storefront-url"
+import { useStoreMeta } from "@/lib/use-store-meta"
 
 interface Store {
   id: string
@@ -26,6 +27,10 @@ interface Store {
   logo_url: string | null
   theme_color: string
   currency: string
+  favicon_url: string | null
+  meta_title: string | null
+  meta_description: string | null
+  description: string | null
   social_links?: {
     phone?: string
     whatsapp?: string
@@ -82,6 +87,9 @@ function CartContent({ params }: { params: { username: string } }) {
   
   const { items, itemCount, subtotal, updateQuantity, removeItem, clearCart } = useCart()
 
+  // Set custom favicon and meta tags
+  useStoreMeta(store)
+
   useEffect(() => {
     fetchStore()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -90,7 +98,7 @@ function CartContent({ params }: { params: { username: string } }) {
   async function fetchStore() {
     const { data: storeData, error: storeError } = await supabase
       .from("stores")
-      .select("id, name, username, logo_url, theme_color, currency, social_links, address")
+      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description")
       .eq("username", params.username)
       .single()
 

@@ -20,6 +20,7 @@ import { StorefrontFooter } from "@/components/storefront/footer"
 import { FloatingButtons } from "@/components/storefront/floating-buttons"
 import { QuickViewModal } from "@/components/storefront/quick-view-modal"
 import { useStorefrontUrl } from "@/lib/use-storefront-url"
+import { useStoreMeta } from "@/lib/use-store-meta"
 
 interface Store {
   id: string
@@ -83,6 +84,7 @@ interface Product {
   image_url: string | null
   images: string[] | null  // Multiple product images
   description: string | null
+  sku: string | null
   category_id: string | null
   category?: Category | null
   stock: number | null  // Stock quantity
@@ -259,6 +261,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
             image_url: p.image_url || null,
             images: p.images || null,  // Include multiple images
             description: p.description || null,
+            sku: p.sku || null,
             category_id: p.category_id,
             category: p.category,
             stock: totalStock,  // Stock quantity (from variants if applicable)
@@ -293,70 +296,8 @@ function StorefrontContent({ params }: { params: { username: string } }) {
     fetchStore()
   }, [params.username])
 
-  // Set custom favicon when store is loaded
-  const faviconSetRef = useRef<string | null>(null)
-  
-  useEffect(() => {
-    if (!store?.favicon_url) return
-    if (typeof window === 'undefined' || !document?.head) return
-    
-    // Don't set the same favicon twice
-    if (faviconSetRef.current === store.favicon_url) return
-
-    try {
-      // Check if we already added this favicon
-      const existingLink = document.querySelector(`link[rel="icon"][data-store-favicon="${store.id}"]`)
-      if (existingLink) return
-
-      // Create and append new favicon link (don't remove old ones - browser will use the last one)
-      const link = document.createElement('link')
-      link.rel = 'icon'
-      link.setAttribute('data-store-favicon', store.id) // Mark it so we don't add duplicates
-      link.type = store.favicon_url.endsWith('.svg') ? 'image/svg+xml' : 'image/x-icon'
-      link.href = store.favicon_url
-      
-      document.head.appendChild(link)
-      faviconSetRef.current = store.favicon_url
-    } catch (error) {
-      // Silently fail - favicon is not critical
-      console.warn('Could not set favicon:', error)
-    }
-  }, [store?.favicon_url, store?.id])
-
-  // Set custom meta title and description when store is loaded
-  useEffect(() => {
-    if (!store) return
-    if (typeof window === 'undefined' || !document) return
-
-    try {
-      // Update document title
-      if (store.meta_title) {
-        document.title = store.meta_title
-      } else if (store.name) {
-        document.title = `${store.name} - Sellium`
-      }
-
-      // Update meta description
-      let metaDescription = document.querySelector('meta[name="description"]')
-      if (!metaDescription && document.head) {
-        metaDescription = document.createElement('meta')
-        metaDescription.setAttribute('name', 'description')
-        document.head.appendChild(metaDescription)
-      }
-      
-      if (metaDescription) {
-        if (store.meta_description) {
-          metaDescription.setAttribute('content', store.meta_description)
-        } else {
-          metaDescription.setAttribute('content', store.description || `Shop at ${store.name} on Sellium`)
-        }
-      }
-    } catch (error) {
-      // Silently fail - meta tags are not critical
-      console.warn('Could not set meta tags:', error)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store?.meta_title, store?.meta_description, store?.name, store?.description])
+  // Set custom favicon and meta tags
+  useStoreMeta(store)
 
   // Auto-slide for banner - only if multiple images
   useEffect(() => {
@@ -496,8 +437,8 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         )
       })()}
 
-      {/* Browse Categories - Only show parent categories */}
-      {categories.filter(c => !c.parent_id).length > 0 && (
+      {/* Browse Categories - Only show parent categories when not searching */}
+      {!searchQuery.trim() && categories.filter(c => !c.parent_id).length > 0 && (
         <section className="py-10 px-4">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center gap-4 mb-6">
@@ -541,8 +482,71 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         </section>
       )}
 
-      {/* Products by Category */}
-      {Object.entries(productsByCategory).map(([categorySlug, categoryData]) => (
+      {/* Search Results */}
+      {searchQuery.trim() && (
+        <section className="py-8 px-4">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center gap-4 mb-6">
+              <h2 className="text-lg font-bold tracking-wide">
+                Search Results for &quot;{searchQuery}&quot;
+              </h2>
+              <div className="flex-1 h-px bg-black/10" />
+              <span className="text-sm text-gray-500">
+                {(() => {
+                  const filtered = products.filter(p => 
+                    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    p.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    p.sku?.toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                  return `${filtered.length} product${filtered.length !== 1 ? 's' : ''} found`
+                })()}
+              </span>
+            </div>
+
+            {(() => {
+              const filteredProducts = products.filter(p => 
+                p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.sku?.toLowerCase().includes(searchQuery.toLowerCase())
+              )
+
+              if (filteredProducts.length === 0) {
+                return (
+                  <div className="text-center py-16">
+                    <p className="text-gray-500 mb-4">No products found matching &quot;{searchQuery}&quot;</p>
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="text-sm font-medium hover:underline"
+                      style={{ color: themeColor }}
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {filteredProducts.map((product) => (
+                    <ProductCard 
+                      key={product.id}
+                      product={product} 
+                      username={params.username}
+                      themeColor={themeColor}
+                      currency={store?.currency || "BDT"}
+                      onQuickView={handleQuickView}
+                      getUrl={getUrl}
+                    />
+                  ))}
+                </div>
+              )
+            })()}
+          </div>
+        </section>
+      )}
+
+      {/* Products by Category - Only show when not searching */}
+      {!searchQuery.trim() && Object.entries(productsByCategory).map(([categorySlug, categoryData]) => (
         <section key={categorySlug} className="py-8 px-4">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center gap-4 mb-6">
@@ -570,8 +574,8 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         </section>
       ))}
 
-      {/* All Products (if no categories) */}
-      {Object.keys(productsByCategory).length === 0 && products.length > 0 && (
+      {/* All Products (if no categories) - Only show when not searching */}
+      {!searchQuery.trim() && Object.keys(productsByCategory).length === 0 && products.length > 0 && (
         <section className="py-10 px-4">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center gap-4 mb-6">

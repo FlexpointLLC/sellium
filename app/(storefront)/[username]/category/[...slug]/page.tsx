@@ -20,6 +20,7 @@ import { StorefrontFooter } from "@/components/storefront/footer"
 import { FloatingButtons } from "@/components/storefront/floating-buttons"
 import { QuickViewModal } from "@/components/storefront/quick-view-modal"
 import { useStorefrontUrl } from "@/lib/use-storefront-url"
+import { useStoreMeta } from "@/lib/use-store-meta"
 
 interface Product {
   id: string
@@ -56,6 +57,10 @@ interface Store {
   logo_url: string | null
   theme_color: string
   currency: string
+  favicon_url: string | null
+  meta_title: string | null
+  meta_description: string | null
+  description: string | null
   social_links?: {
     phone?: string
     whatsapp?: string
@@ -116,6 +121,9 @@ function CategoryContent({
   const [error, setError] = useState(false)
   const { getUrl } = useStorefrontUrl(params.username)
   
+  // Set custom favicon and meta tags
+  useStoreMeta(store)
+  
   // Parse the slug array - can be [parent] or [parent, child]
   const slugParts = params.slug
   const isNestedCategory = slugParts.length > 1
@@ -141,7 +149,7 @@ function CategoryContent({
     // Fetch store
     const { data: storeData, error: storeError } = await supabase
       .from("stores")
-      .select("id, name, username, logo_url, theme_color, currency, social_links, address")
+      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description")
       .eq("username", params.username)
       .single()
 
