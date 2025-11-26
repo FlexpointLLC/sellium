@@ -69,11 +69,13 @@ function SettingsPageContent() {
   
   // File input refs
   const logoInputRef = useRef<HTMLInputElement>(null)
+  const faviconInputRef = useRef<HTMLInputElement>(null)
   const bannerInputRef = useRef<HTMLInputElement>(null)
   const avatarInputRef = useRef<HTMLInputElement>(null)
   
   // Upload states
   const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [uploadingFavicon, setUploadingFavicon] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   
@@ -92,6 +94,7 @@ function SettingsPageContent() {
     username: "",
     description: "",
     logo_url: "",
+    favicon_url: "",
     banner_url: "",
     banner_images: [] as string[],  // Multiple banner images
     theme_color: "#22c55e",
@@ -204,6 +207,7 @@ function SettingsPageContent() {
         username: storeData.username || "",
         description: storeData.description || "",
         logo_url: storeData.logo_url || "",
+        favicon_url: storeData.favicon_url || "",
         banner_url: storeData.banner_url || "",
         banner_images: storeData.banner_images || [],
         theme_color: storeData.theme_color || "#22c55e",
@@ -382,6 +386,59 @@ function SettingsPageContent() {
     }
   }
 
+  // Upload store favicon
+  async function handleFaviconUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !storeId) return
+
+    // Validate file type (should be .ico, .png, or .svg)
+    const validTypes = ['image/x-icon', 'image/png', 'image/svg+xml', 'image/jpeg', 'image/jpg']
+    const validExtensions = ['ico', 'png', 'svg', 'jpg', 'jpeg']
+    const fileExt = file.name.split('.').pop()?.toLowerCase()
+    
+    if (!fileExt || !validExtensions.includes(fileExt)) {
+      toast.error("Please upload a valid favicon file (.ico, .png, .svg, .jpg)")
+      return
+    }
+
+    setUploadingFavicon(true)
+    
+    try {
+      // Delete old favicon if exists
+      if (store.favicon_url) {
+        const oldPath = store.favicon_url.split('/').slice(-2).join('/')
+        await supabase.storage.from('Sellium').remove([`stores/${oldPath}`])
+      }
+
+      const fileName = `${storeId}/favicon.${fileExt}`
+      
+      const { error: uploadError } = await supabase.storage
+        .from('Sellium')
+        .upload(`stores/${fileName}`, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('Sellium')
+        .getPublicUrl(`stores/${fileName}`)
+
+      setStore({ ...store, favicon_url: publicUrl })
+      
+      // Save to database
+      await supabase
+        .from("stores")
+        .update({ favicon_url: publicUrl })
+        .eq("id", storeId)
+
+      toast.success("Favicon uploaded successfully")
+    } catch (error) {
+      console.error("Favicon upload error:", error)
+      toast.error("Failed to upload favicon")
+    } finally {
+      setUploadingFavicon(false)
+    }
+  }
+
   // Upload banner image (supports multiple)
   async function handleBannerUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
@@ -469,6 +526,7 @@ function SettingsPageContent() {
         name: store.name,
         description: store.description,
         logo_url: store.logo_url,
+        favicon_url: store.favicon_url,
         banner_images: store.banner_images,
         theme_color: store.theme_color,
         currency: store.currency,
@@ -752,37 +810,75 @@ function SettingsPageContent() {
               </div>
 
               <div className="space-y-6">
-                {/* Store Logo */}
-                <div className="space-y-2">
-                  <Label>Store Logo</Label>
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border">
-                      {store.logo_url ? (
-                        <img src={store.logo_url} alt="Logo" className="h-full w-full object-cover" />
-                      ) : (
-                        <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                      )}
+                {/* Store Logo & Favicon */}
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Store Logo */}
+                  <div className="space-y-2">
+                    <Label>Store Logo</Label>
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border">
+                        {store.logo_url ? (
+                          <img src={store.logo_url} alt="Logo" className="h-full w-full object-cover" />
+                        ) : (
+                          <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div>
+                        <input
+                          ref={logoInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleLogoUpload}
+                        />
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => logoInputRef.current?.click()}
+                          disabled={uploadingLogo}
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          {uploadingLogo ? "Uploading..." : "Upload Logo"}
+                        </Button>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Recommended: 200x200px, PNG or JPG
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <input
-                        ref={logoInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleLogoUpload}
-                      />
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => logoInputRef.current?.click()}
-                        disabled={uploadingLogo}
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        {uploadingLogo ? "Uploading..." : "Upload Logo"}
-                      </Button>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Recommended: 200x200px, PNG or JPG
-                      </p>
+                  </div>
+
+                  {/* Store Favicon */}
+                  <div className="space-y-2">
+                    <Label>Store Favicon</Label>
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border">
+                        {store.favicon_url ? (
+                          <img src={store.favicon_url} alt="Favicon" className="h-full w-full object-cover" />
+                        ) : (
+                          <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div>
+                        <input
+                          ref={faviconInputRef}
+                          type="file"
+                          accept=".ico,.png,.svg,.jpg,.jpeg"
+                          className="hidden"
+                          onChange={handleFaviconUpload}
+                        />
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => faviconInputRef.current?.click()}
+                          disabled={uploadingFavicon}
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          {uploadingFavicon ? "Uploading..." : "Upload Favicon"}
+                        </Button>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Recommended: 32x32px, ICO, PNG or SVG
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>

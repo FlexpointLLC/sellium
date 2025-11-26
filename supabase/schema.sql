@@ -249,6 +249,7 @@ CREATE TABLE IF NOT EXISTS public.stores (
   description TEXT,
   business_type TEXT NOT NULL,
   logo_url TEXT,
+  favicon_url TEXT,
   banner_url TEXT,
   banner_images TEXT[] DEFAULT '{}',
   theme_color TEXT DEFAULT '#22c55e',

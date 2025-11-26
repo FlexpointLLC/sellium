@@ -27,6 +27,7 @@ interface Store {
   username: string
   description: string | null
   logo_url: string | null
+  favicon_url: string | null
   banner_url: string | null
   banner_images: string[] | null  // Multiple banner images for slider
   theme_color: string | null
@@ -166,6 +167,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         username: storeData.username,
         description: storeData.description || null,
         logo_url: storeData.logo_url || null,
+        favicon_url: storeData.favicon_url || null,
         banner_url: storeData.banner_url || null,
         banner_images: storeData.banner_images || null,
         theme_color: storeData.theme_color || "#000000",
@@ -286,6 +288,22 @@ function StorefrontContent({ params }: { params: { username: string } }) {
 
     fetchStore()
   }, [params.username])
+
+  // Set custom favicon when store is loaded
+  useEffect(() => {
+    if (store?.favicon_url) {
+      // Remove existing favicon links
+      const existingLinks = document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"]')
+      existingLinks.forEach(link => link.remove())
+
+      // Create new favicon link
+      const link = document.createElement('link')
+      link.rel = 'icon'
+      link.type = store.favicon_url.endsWith('.svg') ? 'image/svg+xml' : 'image/x-icon'
+      link.href = store.favicon_url
+      document.head.appendChild(link)
+    }
+  }, [store?.favicon_url])
 
   // Auto-slide for banner - only if multiple images
   useEffect(() => {
