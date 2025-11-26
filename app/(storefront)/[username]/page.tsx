@@ -622,6 +622,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         username={params.username}
         themeColor={themeColor}
         whatsappNumber={store.social_links?.whatsapp}
+        currency={store.currency}
       />
 
       {/* Quick View Modal */}
@@ -803,6 +804,12 @@ function ProductCard({
     
     if (isOutOfStock || isAdding) return
     
+    // If product has variants and not in cart, open quick view to select variant
+    if (product.has_variants && !inCart) {
+      onQuickView?.(product)
+      return
+    }
+    
     setIsAdding(true)
     
     if (inCart) {
@@ -810,7 +817,7 @@ function ProductCard({
       removeByProductId(product.id, undefined)
       toast.success(`${product.name} removed from cart`)
     } else {
-      // Add to cart
+      // Add to cart (for products without variants)
       addItem({
         productId: product.id,
         name: product.name,
@@ -819,7 +826,7 @@ function ProductCard({
         quantity: 1,
         image: productImages[0] || null,
         stock: product.stock || 0,
-        sku: undefined
+        sku: product.sku || undefined
       })
       toast.success(`${product.name} added to cart`)
     }

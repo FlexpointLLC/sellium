@@ -33,6 +33,8 @@ interface Product {
   stock: number
   daily_sales: number | null
   category_id: string | null
+  sku: string | null
+  has_variants: boolean
 }
 
 interface ProductsBySubcategory {
@@ -481,6 +483,7 @@ function CategoryContent({
         username={params.username}
         themeColor={themeColor}
         whatsappNumber={store.social_links?.whatsapp}
+        currency={store.currency}
       />
 
       {/* Quick View Modal */}
@@ -526,7 +529,8 @@ function ProductCard({
   const discountPercent = hasDiscount 
     ? Math.round(((product.compare_at_price! - product.price) / product.compare_at_price!) * 100)
     : 0
-  const isOutOfStock = product.stock === null || product.stock === undefined || product.stock <= 0
+  // For products with variants, don't show out of stock on the card - let user view variants
+  const isOutOfStock = !product.has_variants && (product.stock === null || product.stock === undefined || product.stock <= 0)
   const isHot = (product.daily_sales || 0) > 10
   const inCart = isInCart(product.id)
 
@@ -543,6 +547,12 @@ function ProductCard({
     e.preventDefault()
     e.stopPropagation()
     
+    // If product has variants and not in cart, open quick view to select variant
+    if (product.has_variants && !inCart) {
+      onQuickView?.(product)
+      return
+    }
+    
     if (inCart) {
       // Remove by productId (no variant for default)
       removeByProductId(product.id, undefined)
@@ -555,7 +565,8 @@ function ProductCard({
         compareAtPrice: product.compare_at_price || undefined,
         quantity: 1,
         image: productImages[0] || null,
-        stock: product.stock || 0
+        stock: product.stock || 0,
+        sku: product.sku || undefined
       })
       toast.success(`${product.name} added to cart`)
     }

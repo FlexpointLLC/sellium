@@ -401,6 +401,7 @@ function CartContent({ params }: { params: { username: string } }) {
         username={params.username}
         themeColor={themeColor}
         whatsappNumber={store.social_links?.whatsapp}
+        currency={store.currency}
       />
     </div>
   )
