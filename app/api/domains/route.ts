@@ -90,12 +90,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to save domain" }, { status: 500 })
     }
 
+    console.log("Domain added to Vercel:", JSON.stringify(vercelData, null, 2))
+
     return NextResponse.json({
       success: true,
       domain: domainData,
       vercel: {
         verified: vercelData.verified,
-        verification: vercelData.verification,
+        verification: vercelData.verification || [],
+        apexName: vercelData.apexName,
+        name: vercelData.name,
       }
     })
 
@@ -140,20 +144,24 @@ export async function GET(request: NextRequest) {
       ? `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/domains/${domain}?teamId=${VERCEL_TEAM_ID}`
       : `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/domains/${domain}`
 
+    console.log("Checking domain on Vercel:", vercelUrl)
+
     const vercelResponse = await fetch(vercelUrl, {
       headers: {
         "Authorization": `Bearer ${VERCEL_API_TOKEN}`,
       },
     })
 
+    const vercelData = await vercelResponse.json()
+    console.log("Vercel domain check response:", JSON.stringify(vercelData, null, 2))
+
     if (!vercelResponse.ok) {
-      const errorData = await vercelResponse.json()
       return NextResponse.json({ 
-        error: errorData.error?.message || "Failed to check domain status" 
+        error: vercelData.error?.message || "Failed to check domain status",
+        verified: false,
+        verification: vercelData.verification || []
       }, { status: 400 })
     }
-
-    const vercelData = await vercelResponse.json()
 
     // Update domain status in Supabase
     const newStatus = vercelData.verified ? "verified" : "pending"
@@ -172,9 +180,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       verified: vercelData.verified,
-      verification: vercelData.verification,
+      verification: vercelData.verification || [],
       status: newStatus,
       ssl_status: newSslStatus,
+      // Include raw Vercel data for debugging
+      vercelConfig: {
+        apexName: vercelData.apexName,
+        verified: vercelData.verified,
+        verification: vercelData.verification,
+      }
     })
 
   } catch (error) {

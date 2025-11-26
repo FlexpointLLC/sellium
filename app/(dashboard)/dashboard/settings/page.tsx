@@ -570,21 +570,25 @@ function SettingsPageContent() {
         return
       }
 
-      setCustomDomain({
-        id: data.domain.id,
-        domain: data.domain.domain,
-        status: data.domain.status,
-        ssl_status: data.domain.ssl_status,
-        verification_token: data.domain.verification_token,
-        dns_configured: data.domain.dns_configured
-      })
+      // Always set to pending after adding - user needs to configure DNS
+      const newDomainState = {
+        id: data.domain?.id,
+        domain: data.domain?.domain || domainInput.trim().toLowerCase(),
+        status: data.vercel?.verified ? "verified" as const : "pending" as const,
+        ssl_status: data.vercel?.verified ? "active" as const : "pending" as const,
+        verification_token: data.domain?.verification_token || data.vercel?.verification?.[0]?.value,
+        dns_configured: data.vercel?.verified || false
+      }
+      
+      console.log("Setting domain state:", newDomainState)
+      setCustomDomain(newDomainState)
       setDomainInput("")
       setVerifyingDomain(false)
       
       if (data.vercel?.verified) {
         toast.success("Domain added and verified!")
       } else {
-        toast.success("Domain added to Vercel! Please configure DNS records.")
+        toast.success("Domain added! Please configure DNS records below.")
       }
     } catch (error) {
       console.error("Error adding domain:", error)
@@ -600,10 +604,10 @@ function SettingsPageContent() {
     setVerifyingDomain(true)
 
     // Update UI to show verifying state
-    setCustomDomain({
-      ...customDomain,
+    setCustomDomain(prev => ({
+      ...prev,
       status: "verifying"
-    })
+    }))
 
     try {
       const response = await fetch(
@@ -611,40 +615,47 @@ function SettingsPageContent() {
       )
 
       const data = await response.json()
+      console.log("Verify response:", data)
 
       if (!response.ok) {
         toast.error(data.error || "Failed to verify domain")
-        setCustomDomain({
-          ...customDomain,
+        setCustomDomain(prev => ({
+          ...prev,
           status: "pending"
-        })
+        }))
         setVerifyingDomain(false)
         return
       }
 
-      setCustomDomain({
-        ...customDomain,
-        status: data.status,
-        ssl_status: data.ssl_status,
-        dns_configured: data.verified
-      })
-
       if (data.verified) {
+        setCustomDomain(prev => ({
+          ...prev,
+          status: "verified",
+          ssl_status: "active",
+          dns_configured: true
+        }))
         toast.success("Domain verified successfully! SSL certificate is active.")
       } else {
-        toast.info("DNS not configured yet. Please add the DNS records and try again.")
-        setCustomDomain({
-          ...customDomain,
-          status: "pending"
-        })
+        // Show more detailed error from Vercel
+        const verificationInfo = data.verification?.[0]
+        if (verificationInfo) {
+          toast.error(`DNS not configured: ${verificationInfo.reason || "Please check your DNS records"}`)
+        } else {
+          toast.info("DNS not configured yet. Please add the DNS records and try again.")
+        }
+        setCustomDomain(prev => ({
+          ...prev,
+          status: "pending",
+          dns_configured: false
+        }))
       }
     } catch (error) {
       console.error("Error verifying domain:", error)
       toast.error("Failed to verify domain")
-      setCustomDomain({
-        ...customDomain,
+      setCustomDomain(prev => ({
+        ...prev,
         status: "pending"
-      })
+      }))
     } finally {
       setVerifyingDomain(false)
     }
