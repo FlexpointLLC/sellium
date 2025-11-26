@@ -168,6 +168,9 @@ function SettingsPageContent() {
   })
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
 
+  // Store settings sub-tabs
+  const [storeSubTab, setStoreSubTab] = useState<"branding" | "information" | "seo" | "contact">("branding")
+
   // Custom domain settings
   const [customDomain, setCustomDomain] = useState<{
     id?: string
@@ -1029,342 +1032,451 @@ function SettingsPageContent() {
                 <p className="text-sm text-muted-foreground">Customize your store appearance and information</p>
               </div>
 
-              <div className="space-y-6">
-                {/* Store Logo & Favicon */}
-                <div className="grid gap-6 md:grid-cols-2">
-                  {/* Store Logo */}
-                  <div className="space-y-2">
-                    <Label>Store Logo</Label>
-                    <div className="flex items-center gap-4">
-                      <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border border-border/50 group">
-                        {store.logo_url ? (
-                          <>
-                            <img src={store.logo_url} alt="Logo" className="h-full w-full object-cover" />
-                            <button
-                              onClick={handleDeleteLogo}
-                              className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Delete logo"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </>
-                        ) : (
-                          <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div>
-                        <input
-                          ref={logoInputRef}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleLogoUpload}
-                        />
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => logoInputRef.current?.click()}
-                          disabled={uploadingLogo}
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          {uploadingLogo ? "Uploading..." : "Upload Logo"}
-                        </Button>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Recommended: 200x200px, PNG or JPG
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+              {/* Store Sub-tabs */}
+              <div className="mb-6 border-b border-border/50">
+                <nav className="flex gap-1 -mb-px">
+                  <button
+                    onClick={() => setStoreSubTab("branding")}
+                    className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                      storeSubTab === "branding"
+                        ? "border-foreground text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                    }`}
+                  >
+                    Branding
+                  </button>
+                  <button
+                    onClick={() => setStoreSubTab("information")}
+                    className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                      storeSubTab === "information"
+                        ? "border-foreground text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                    }`}
+                  >
+                    Information
+                  </button>
+                  <button
+                    onClick={() => setStoreSubTab("seo")}
+                    className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                      storeSubTab === "seo"
+                        ? "border-foreground text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                    }`}
+                  >
+                    SEO
+                  </button>
+                  <button
+                    onClick={() => setStoreSubTab("contact")}
+                    className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                      storeSubTab === "contact"
+                        ? "border-foreground text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                    }`}
+                  >
+                    Contact
+                  </button>
+                </nav>
+              </div>
 
-                  {/* Store Favicon */}
-                  <div className="space-y-2">
-                    <Label>Store Favicon</Label>
-                    <div className="flex items-center gap-4">
-                      <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border border-border/50 group">
-                        {store.favicon_url ? (
-                          <>
-                            <img src={store.favicon_url} alt="Favicon" className="h-full w-full object-cover" />
-                            <button
-                              onClick={handleDeleteFavicon}
-                              className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Delete favicon"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </>
-                        ) : (
-                          <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div>
-                        <input
-                          ref={faviconInputRef}
-                          type="file"
-                          accept=".ico,.png,.svg,.jpg,.jpeg"
-                          className="hidden"
-                          onChange={handleFaviconUpload}
-                        />
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => faviconInputRef.current?.click()}
-                          disabled={uploadingFavicon}
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          {uploadingFavicon ? "Uploading..." : "Upload Favicon"}
-                        </Button>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Recommended: 32x32px, ICO, PNG or SVG
-                        </p>
-                      </div>
+              <div className="space-y-8">
+                {/* Branding Tab */}
+                {storeSubTab === "branding" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold mb-1">Branding</h3>
+                      <p className="text-xs text-muted-foreground">Customize your store&apos;s visual identity</p>
                     </div>
-                  </div>
-                </div>
-
-                {/* Store Banners (Multiple) */}
-                <div className="space-y-2">
-                  <Label>Store Banners</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Upload multiple banners for your storefront slider. Recommended: 1920x600px
-                  </p>
-                  
-                  {/* Banner Grid */}
-                  <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                    {store.banner_images.map((banner, index) => (
-                      <div key={index} className="relative group aspect-[16/5] rounded-lg overflow-hidden border border-border/50 bg-muted">
-                        <img src={banner} alt={`Banner ${index + 1}`} className="h-full w-full object-cover" />
-                        <button
-                          onClick={() => removeBanner(index)}
-                          className="absolute top-2 right-2 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                        <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/50 text-white text-xs">
-                          Banner {index + 1}
+                    
+                    <div className="space-y-6 p-4 rounded-xl border border-border/50 bg-muted/30">
+                    {/* Store Logo & Favicon */}
+                    <div className="grid gap-6 md:grid-cols-2">
+                      {/* Store Logo */}
+                      <div className="space-y-2">
+                        <Label>Store Logo</Label>
+                        <div className="flex items-center gap-4">
+                          <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border border-border/50 group">
+                            {store.logo_url ? (
+                              <>
+                                <img src={store.logo_url} alt="Logo" className="h-full w-full object-cover" />
+                                <button
+                                  onClick={handleDeleteLogo}
+                                  className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Delete logo"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </>
+                            ) : (
+                              <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div>
+                            <input
+                              ref={logoInputRef}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleLogoUpload}
+                            />
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => logoInputRef.current?.click()}
+                              disabled={uploadingLogo}
+                            >
+                              <Upload className="h-4 w-4 mr-2" />
+                              {uploadingLogo ? "Uploading..." : "Upload Logo"}
+                            </Button>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Recommended: 200x200px, PNG or JPG
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    ))}
+
+                      {/* Store Favicon */}
+                      <div className="space-y-2">
+                        <Label>Store Favicon</Label>
+                        <div className="flex items-center gap-4">
+                          <div className="relative flex h-16 w-16 items-center justify-center rounded-lg bg-muted overflow-hidden border border-border/50 group">
+                            {store.favicon_url ? (
+                              <>
+                                <img src={store.favicon_url} alt="Favicon" className="h-full w-full object-cover" />
+                                <button
+                                  onClick={handleDeleteFavicon}
+                                  className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Delete favicon"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </>
+                            ) : (
+                              <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div>
+                            <input
+                              ref={faviconInputRef}
+                              type="file"
+                              accept=".ico,.png,.svg,.jpg,.jpeg"
+                              className="hidden"
+                              onChange={handleFaviconUpload}
+                            />
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => faviconInputRef.current?.click()}
+                              disabled={uploadingFavicon}
+                            >
+                              <Upload className="h-4 w-4 mr-2" />
+                              {uploadingFavicon ? "Uploading..." : "Upload Favicon"}
+                            </Button>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Recommended: 32x32px, ICO, PNG or SVG
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Store Banners */}
+                    <div className="space-y-3 pt-4 border-t border-border/50">
+                      <div>
+                        <Label>Store Banners</Label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Upload multiple banners for your storefront slider. Recommended: 1920x600px
+                        </p>
+                      </div>
+                      
+                      {/* Banner Grid */}
+                      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                        {store.banner_images.map((banner, index) => (
+                          <div key={index} className="relative group aspect-[16/5] rounded-lg overflow-hidden border border-border/50 bg-muted">
+                            <img src={banner} alt={`Banner ${index + 1}`} className="h-full w-full object-cover" />
+                            <button
+                              onClick={() => removeBanner(index)}
+                              className="absolute top-2 right-2 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                            <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/50 text-white text-xs">
+                              Banner {index + 1}
+                            </div>
+                          </div>
+                        ))}
+                        
+                        {/* Add Banner Button */}
+                        <div 
+                          className="aspect-[16/5] rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center cursor-pointer hover:border-muted-foreground/50 transition-colors"
+                          onClick={() => bannerInputRef.current?.click()}
+                        >
+                          <input
+                            ref={bannerInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={handleBannerUpload}
+                          />
+                          {uploadingBanner ? (
+                            <span className="text-sm text-muted-foreground">Uploading...</span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <Plus className="h-5 w-5" />
+                              Add Banner
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+                )}
+
+                {/* Information Tab */}
+                {storeSubTab === "information" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold mb-1">Basic Information</h3>
+                      <p className="text-xs text-muted-foreground">Store name, username, and description</p>
+                    </div>
                     
-                    {/* Add Banner Button */}
-                    <div 
-                      className="aspect-[16/5] rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center cursor-pointer hover:border-muted-foreground/50 transition-colors"
-                      onClick={() => bannerInputRef.current?.click()}
-                    >
-                      <input
-                        ref={bannerInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                        onChange={handleBannerUpload}
-                      />
-                      {uploadingBanner ? (
-                        <span className="text-sm text-muted-foreground">Uploading...</span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Plus className="h-5 w-5" />
-                          Add Banner
-                        </span>
-                      )}
+                    <div className="space-y-4 p-4 rounded-xl border border-border/50 bg-muted/30">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Store Name</Label>
+                        <Input 
+                          value={store.name} 
+                          onChange={(e) => setStore({ ...store, name: e.target.value })}
+                          placeholder="My Store"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Username</Label>
+                        <div className="flex">
+                          <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">
+                            sellium.store/
+                          </span>
+                          <Input 
+                            value={store.username}
+                            className="rounded-l-none"
+                            disabled
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Basic Info */}
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Store Name</Label>
-                    <Input 
-                      value={store.name} 
-                      onChange={(e) => setStore({ ...store, name: e.target.value })}
-                      placeholder="My Store"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Username</Label>
-                    <div className="flex">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">
-                        sellium.store/
-                      </span>
-                      <Input 
-                        value={store.username}
-                        className="rounded-l-none"
-                        disabled
+                    <div className="space-y-2">
+                      <Label>Store Description</Label>
+                      <textarea
+                        className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        placeholder="Describe your store..."
+                        value={store.description}
+                        onChange={(e) => setStore({ ...store, description: e.target.value })}
                       />
                     </div>
                   </div>
-                </div>
+                  </div>
+                )}
 
-                <div className="space-y-2">
-                  <Label>Store Description</Label>
-                  <textarea
-                    className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    placeholder="Describe your store..."
-                    value={store.description}
-                    onChange={(e) => setStore({ ...store, description: e.target.value })}
-                  />
-                </div>
-
-                {/* SEO Meta Tags */}
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium mb-3">SEO Settings</h3>
-                    <p className="text-xs text-muted-foreground mb-4">
-                      Customize how your store appears in search engines and browser tabs
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Page Title</Label>
-                    <Input 
-                      value={store.meta_title} 
-                      onChange={(e) => setStore({ ...store, meta_title: e.target.value })}
-                      placeholder="Sellium - Multi-Vendor Marketplace"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      This appears in browser tabs and search results. Leave empty to use default.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Meta Description</Label>
-                    <textarea
-                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      placeholder="A modern multi-vendor ecommerce platform"
-                      value={store.meta_description}
-                      onChange={(e) => setStore({ ...store, meta_description: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Brief description for search engines. Recommended: 150-160 characters.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Theme Color */}
-                <div className="space-y-2">
-                  <Label>Theme Color</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={store.theme_color}
-                      onChange={(e) => setStore({ ...store, theme_color: e.target.value })}
-                      className="h-10 w-14 rounded border border-input cursor-pointer"
-                    />
-                    <Input 
-                      value={store.theme_color}
-                      onChange={(e) => setStore({ ...store, theme_color: e.target.value })}
-                      className="w-32"
-                    />
-                  </div>
-                </div>
-
-                {/* Timezone */}
-                <div className="space-y-2">
-                  <Label>Timezone</Label>
-                  <Select value={store.timezone} onValueChange={(v) => setStore({ ...store, timezone: v })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Asia/Dhaka">Asia/Dhaka (GMT+6)</SelectItem>
-                      <SelectItem value="Asia/Kolkata">Asia/Kolkata (GMT+5:30)</SelectItem>
-                      <SelectItem value="America/New_York">America/New_York (GMT-5)</SelectItem>
-                      <SelectItem value="Europe/London">Europe/London (GMT+0)</SelectItem>
-                      <SelectItem value="Asia/Dubai">Asia/Dubai (GMT+4)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Social Links */}
-                <div className="space-y-4">
-                  <Label className="text-base font-medium">Social Links & Contact</Label>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Phone</Label>
-                      <Input 
-                        value={store.social_links.phone}
-                        onChange={(e) => setStore({ ...store, social_links: { ...store.social_links, phone: e.target.value } })}
-                        placeholder="+880 1XXX-XXXXXX"
-                      />
+                {/* SEO Tab */}
+                {storeSubTab === "seo" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold mb-1">SEO Settings</h3>
+                      <p className="text-xs text-muted-foreground">Customize how your store appears in search engines and browser tabs</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label>WhatsApp</Label>
-                      <Input 
-                        value={store.social_links.whatsapp}
-                        onChange={(e) => setStore({ ...store, social_links: { ...store.social_links, whatsapp: e.target.value } })}
-                        placeholder="+880 1XXX-XXXXXX"
-                      />
+                    
+                    <div className="space-y-4 p-4 rounded-xl border border-border/50 bg-muted/30">
+                      <div className="space-y-2">
+                        <Label>Page Title</Label>
+                        <Input 
+                          value={store.meta_title} 
+                          onChange={(e) => setStore({ ...store, meta_title: e.target.value })}
+                          placeholder="Sellium - Multi-Vendor Marketplace"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          This appears in browser tabs and search results. Leave empty to use default.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Meta Description</Label>
+                        <textarea
+                          className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          placeholder="A modern multi-vendor ecommerce platform"
+                          value={store.meta_description}
+                          onChange={(e) => setStore({ ...store, meta_description: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Brief description for search engines. Recommended: 150-160 characters.
+                        </p>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Instagram</Label>
-                      <Input 
-                        value={store.social_links.instagram}
-                        onChange={(e) => setStore({ ...store, social_links: { ...store.social_links, instagram: e.target.value } })}
-                        placeholder="https://instagram.com/yourstore"
-                      />
+
+                    {/* Theme Color */}
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="text-sm font-semibold mb-1">Appearance</h3>
+                        <p className="text-xs text-muted-foreground">Theme color for your store</p>
+                      </div>
+                      
+                      <div className="p-4 rounded-xl border border-border/50 bg-muted/30">
+                        <div className="space-y-2">
+                          <Label>Theme Color</Label>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="color"
+                              value={store.theme_color}
+                              onChange={(e) => setStore({ ...store, theme_color: e.target.value })}
+                              className="h-10 w-14 rounded border border-input cursor-pointer"
+                            />
+                            <Input 
+                              value={store.theme_color}
+                              onChange={(e) => setStore({ ...store, theme_color: e.target.value })}
+                              className="w-32"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Facebook</Label>
-                      <Input 
-                        value={store.social_links.facebook}
-                        onChange={(e) => setStore({ ...store, social_links: { ...store.social_links, facebook: e.target.value } })}
-                        placeholder="https://facebook.com/yourstore"
-                      />
+
+                    {/* Regional Settings */}
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="text-sm font-semibold mb-1">Regional Settings</h3>
+                        <p className="text-xs text-muted-foreground">Timezone configuration</p>
+                      </div>
+                      
+                      <div className="p-4 rounded-xl border border-border/50 bg-muted/30">
+                        <div className="space-y-2">
+                          <Label>Timezone</Label>
+                          <Select value={store.timezone} onValueChange={(v) => setStore({ ...store, timezone: v })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Asia/Dhaka">Asia/Dhaka (GMT+6)</SelectItem>
+                              <SelectItem value="Asia/Kolkata">Asia/Kolkata (GMT+5:30)</SelectItem>
+                              <SelectItem value="America/New_York">America/New_York (GMT-5)</SelectItem>
+                              <SelectItem value="Europe/London">Europe/London (GMT+0)</SelectItem>
+                              <SelectItem value="Asia/Dubai">Asia/Dubai (GMT+4)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* Address */}
-                <div className="space-y-4">
-                  <Label className="text-base font-medium">Store Address</Label>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2 md:col-span-2">
-                      <Label>Street Address</Label>
-                      <Input 
-                        value={store.address.street}
-                        onChange={(e) => setStore({ ...store, address: { ...store.address, street: e.target.value } })}
-                        placeholder="123 Main Street"
-                      />
+                {/* Contact Tab */}
+                {storeSubTab === "contact" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold mb-1">Contact Information</h3>
+                      <p className="text-xs text-muted-foreground">Social links and store address</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label>City</Label>
-                      <Input 
-                        value={store.address.city}
-                        onChange={(e) => setStore({ ...store, address: { ...store.address, city: e.target.value } })}
-                        placeholder="Dhaka"
-                      />
+                    
+                    <div className="space-y-6 p-4 rounded-xl border border-border/50 bg-muted/30">
+                    {/* Social Links */}
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="text-xs font-medium mb-3">Social Links</h4>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Phone</Label>
+                          <Input 
+                            value={store.social_links.phone}
+                            onChange={(e) => setStore({ ...store, social_links: { ...store.social_links, phone: e.target.value } })}
+                            placeholder="+880 1XXX-XXXXXX"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>WhatsApp</Label>
+                          <Input 
+                            value={store.social_links.whatsapp}
+                            onChange={(e) => setStore({ ...store, social_links: { ...store.social_links, whatsapp: e.target.value } })}
+                            placeholder="+880 1XXX-XXXXXX"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Instagram</Label>
+                          <Input 
+                            value={store.social_links.instagram}
+                            onChange={(e) => setStore({ ...store, social_links: { ...store.social_links, instagram: e.target.value } })}
+                            placeholder="https://instagram.com/yourstore"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Facebook</Label>
+                          <Input 
+                            value={store.social_links.facebook}
+                            onChange={(e) => setStore({ ...store, social_links: { ...store.social_links, facebook: e.target.value } })}
+                            placeholder="https://facebook.com/yourstore"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>State / Division</Label>
-                      <Input 
-                        value={store.address.state}
-                        onChange={(e) => setStore({ ...store, address: { ...store.address, state: e.target.value } })}
-                        placeholder="Dhaka Division"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Country</Label>
-                      <Input 
-                        value={store.address.country}
-                        onChange={(e) => setStore({ ...store, address: { ...store.address, country: e.target.value } })}
-                        placeholder="Bangladesh"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Postal Code</Label>
-                      <Input 
-                        value={store.address.postal_code}
-                        onChange={(e) => setStore({ ...store, address: { ...store.address, postal_code: e.target.value } })}
-                        placeholder="1000"
-                      />
+
+                    {/* Address */}
+                    <div className="space-y-4 pt-4 border-t border-border/50">
+                      <div>
+                        <h4 className="text-xs font-medium mb-3">Store Address</h4>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Street Address</Label>
+                          <Input 
+                            value={store.address.street}
+                            onChange={(e) => setStore({ ...store, address: { ...store.address, street: e.target.value } })}
+                            placeholder="123 Main Street"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>City</Label>
+                          <Input 
+                            value={store.address.city}
+                            onChange={(e) => setStore({ ...store, address: { ...store.address, city: e.target.value } })}
+                            placeholder="Dhaka"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>State / Division</Label>
+                          <Input 
+                            value={store.address.state}
+                            onChange={(e) => setStore({ ...store, address: { ...store.address, state: e.target.value } })}
+                            placeholder="Dhaka Division"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Country</Label>
+                          <Input 
+                            value={store.address.country}
+                            onChange={(e) => setStore({ ...store, address: { ...store.address, country: e.target.value } })}
+                            placeholder="Bangladesh"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Postal Code</Label>
+                          <Input 
+                            value={store.address.postal_code}
+                            onChange={(e) => setStore({ ...store, address: { ...store.address, postal_code: e.target.value } })}
+                            placeholder="1000"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                  </div>
+                )}
+              </div>
 
-                <div className="flex justify-end gap-4 pt-4 border-t border-border/50">
-                  <Button variant="outline" size="sm">Cancel</Button>
-                  <Button size="sm" onClick={handleSaveStore} disabled={saving}>
-                    {saving ? "Saving..." : "Save Changes"}
-                  </Button>
-                </div>
+              {/* Save Button - Always visible */}
+              <div className="flex justify-end gap-4 pt-6 mt-8 border-t border-border/50">
+                <Button variant="outline" size="sm">Cancel</Button>
+                <Button size="sm" onClick={handleSaveStore} disabled={saving}>
+                  {saving ? "Saving..." : "Save Changes"}
+                </Button>
               </div>
             </div>
           )}
@@ -2345,3 +2457,4 @@ function SettingsPageContent() {
     </div>
   )
 }
+
