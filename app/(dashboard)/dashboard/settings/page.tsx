@@ -2,8 +2,8 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise } from "phosphor-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise, Copy, Check } from "phosphor-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,11 +16,24 @@ type TabType = "store" | "profile" | "domain" | "notifications" | "payments" | "
 
 export default function SettingsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
-  const [activeTab, setActiveTab] = useState<TabType>("store")
+  
+  // Get initial tab from URL or default to "store"
+  const tabFromUrl = searchParams.get("tab") as TabType | null
+  const validTabs: TabType[] = ["store", "profile", "domain", "notifications", "payments", "security"]
+  const initialTab = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : "store"
+  
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [storeId, setStoreId] = useState<string | null>(null)
+  
+  // Update URL when tab changes
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab)
+    router.push(`/dashboard/settings?tab=${tab}`, { scroll: false })
+  }
   
   // File input refs
   const logoInputRef = useRef<HTMLInputElement>(null)
@@ -101,6 +114,19 @@ export default function SettingsPage() {
   })
   const [verifyingDomain, setVerifyingDomain] = useState(false)
   const [domainInput, setDomainInput] = useState("")
+  const [copiedValue, setCopiedValue] = useState<string | null>(null)
+
+  // Copy to clipboard function
+  const copyToClipboard = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedValue(value)
+      toast.success("Copied to clipboard!")
+      setTimeout(() => setCopiedValue(null), 2000)
+    } catch {
+      toast.error("Failed to copy")
+    }
+  }
 
   useEffect(() => {
     fetchData()
@@ -644,7 +670,7 @@ export default function SettingsPage() {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? "bg-muted"
@@ -1143,15 +1169,54 @@ export default function SettingsPage() {
                                 <div className="grid grid-cols-3 gap-4 bg-background p-3 rounded border">
                                   <div>
                                     <p className="text-xs text-muted-foreground mb-1">Type</p>
-                                    <p className="font-mono text-xs">A</p>
+                                    <div className="flex items-center gap-1">
+                                      <p className="font-mono text-xs">A</p>
+                                      <button
+                                        onClick={() => copyToClipboard("A")}
+                                        className="p-1 hover:bg-muted rounded transition-colors"
+                                        title="Copy"
+                                      >
+                                        {copiedValue === "A" ? (
+                                          <Check className="h-3 w-3 text-green-500" />
+                                        ) : (
+                                          <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                        )}
+                                      </button>
+                                    </div>
                                   </div>
                                   <div>
                                     <p className="text-xs text-muted-foreground mb-1">Name</p>
-                                    <p className="font-mono text-xs">@</p>
+                                    <div className="flex items-center gap-1">
+                                      <p className="font-mono text-xs">@</p>
+                                      <button
+                                        onClick={() => copyToClipboard("@")}
+                                        className="p-1 hover:bg-muted rounded transition-colors"
+                                        title="Copy"
+                                      >
+                                        {copiedValue === "@" ? (
+                                          <Check className="h-3 w-3 text-green-500" />
+                                        ) : (
+                                          <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                        )}
+                                      </button>
+                                    </div>
                                   </div>
                                   <div>
                                     <p className="text-xs text-muted-foreground mb-1">Value</p>
-                                    <p className="font-mono text-xs">76.76.21.21</p>
+                                    <div className="flex items-center gap-1">
+                                      <p className="font-mono text-xs">76.76.21.21</p>
+                                      <button
+                                        onClick={() => copyToClipboard("76.76.21.21")}
+                                        className="p-1 hover:bg-muted rounded transition-colors"
+                                        title="Copy"
+                                      >
+                                        {copiedValue === "76.76.21.21" ? (
+                                          <Check className="h-3 w-3 text-green-500" />
+                                        ) : (
+                                          <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                        )}
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -1162,15 +1227,54 @@ export default function SettingsPage() {
                                 <div className="grid grid-cols-3 gap-4 bg-background p-3 rounded border">
                                   <div>
                                     <p className="text-xs text-muted-foreground mb-1">Type</p>
-                                    <p className="font-mono text-xs">CNAME</p>
+                                    <div className="flex items-center gap-1">
+                                      <p className="font-mono text-xs">CNAME</p>
+                                      <button
+                                        onClick={() => copyToClipboard("CNAME")}
+                                        className="p-1 hover:bg-muted rounded transition-colors"
+                                        title="Copy"
+                                      >
+                                        {copiedValue === "CNAME" ? (
+                                          <Check className="h-3 w-3 text-green-500" />
+                                        ) : (
+                                          <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                        )}
+                                      </button>
+                                    </div>
                                   </div>
                                   <div>
                                     <p className="text-xs text-muted-foreground mb-1">Name</p>
-                                    <p className="font-mono text-xs">www</p>
+                                    <div className="flex items-center gap-1">
+                                      <p className="font-mono text-xs">www</p>
+                                      <button
+                                        onClick={() => copyToClipboard("www")}
+                                        className="p-1 hover:bg-muted rounded transition-colors"
+                                        title="Copy"
+                                      >
+                                        {copiedValue === "www" ? (
+                                          <Check className="h-3 w-3 text-green-500" />
+                                        ) : (
+                                          <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                        )}
+                                      </button>
+                                    </div>
                                   </div>
                                   <div>
                                     <p className="text-xs text-muted-foreground mb-1">Value</p>
-                                    <p className="font-mono text-xs break-all">cname.vercel-dns.com</p>
+                                    <div className="flex items-center gap-1">
+                                      <p className="font-mono text-xs break-all">cname.vercel-dns.com</p>
+                                      <button
+                                        onClick={() => copyToClipboard("cname.vercel-dns.com")}
+                                        className="p-1 hover:bg-muted rounded transition-colors flex-shrink-0"
+                                        title="Copy"
+                                      >
+                                        {copiedValue === "cname.vercel-dns.com" ? (
+                                          <Check className="h-3 w-3 text-green-500" />
+                                        ) : (
+                                          <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                        )}
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -1182,15 +1286,54 @@ export default function SettingsPage() {
                                   <div className="grid grid-cols-3 gap-4 bg-background p-3 rounded border">
                                     <div>
                                       <p className="text-xs text-muted-foreground mb-1">Type</p>
-                                      <p className="font-mono text-xs">TXT</p>
+                                      <div className="flex items-center gap-1">
+                                        <p className="font-mono text-xs">TXT</p>
+                                        <button
+                                          onClick={() => copyToClipboard("TXT")}
+                                          className="p-1 hover:bg-muted rounded transition-colors"
+                                          title="Copy"
+                                        >
+                                          {copiedValue === "TXT" ? (
+                                            <Check className="h-3 w-3 text-green-500" />
+                                          ) : (
+                                            <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                          )}
+                                        </button>
+                                      </div>
                                     </div>
                                     <div>
                                       <p className="text-xs text-muted-foreground mb-1">Name</p>
-                                      <p className="font-mono text-xs">_vercel</p>
+                                      <div className="flex items-center gap-1">
+                                        <p className="font-mono text-xs">_vercel</p>
+                                        <button
+                                          onClick={() => copyToClipboard("_vercel")}
+                                          className="p-1 hover:bg-muted rounded transition-colors"
+                                          title="Copy"
+                                        >
+                                          {copiedValue === "_vercel" ? (
+                                            <Check className="h-3 w-3 text-green-500" />
+                                          ) : (
+                                            <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                          )}
+                                        </button>
+                                      </div>
                                     </div>
                                     <div>
                                       <p className="text-xs text-muted-foreground mb-1">Value</p>
-                                      <p className="font-mono text-xs break-all">{customDomain.verification_token}</p>
+                                      <div className="flex items-center gap-1">
+                                        <p className="font-mono text-xs break-all">{customDomain.verification_token}</p>
+                                        <button
+                                          onClick={() => copyToClipboard(customDomain.verification_token || "")}
+                                          className="p-1 hover:bg-muted rounded transition-colors flex-shrink-0"
+                                          title="Copy"
+                                        >
+                                          {copiedValue === customDomain.verification_token ? (
+                                            <Check className="h-3 w-3 text-green-500" />
+                                          ) : (
+                                            <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                          )}
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
