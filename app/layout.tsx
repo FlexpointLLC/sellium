@@ -6,6 +6,13 @@ import { Toaster } from "sonner";
 export const metadata: Metadata = {
   title: "Sellium - Multi-Vendor Marketplace",
   description: "A modern multi-vendor ecommerce platform",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.png", type: "image/png" },
+    ],
+    apple: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
