@@ -17,6 +17,10 @@ import {
   Stack,
   User,
   Circle,
+  CreditCard,
+  Shield,
+  Bell,
+  Link as LinkIcon,
 } from "phosphor-react"
 
 import {
@@ -247,7 +251,7 @@ export function DashboardSidebar() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64 p-0 ml-2 border-0 bg-muted/50 shadow-lg">
+            <DropdownMenuContent align="end" className="w-64 p-0 ml-2 border-0 bg-gray-50 dark:bg-gray-900 shadow-lg">
               {/* User Profile Section */}
               <div className="px-4 py-3 border-b">
                 <div className="flex items-center gap-3">
@@ -293,15 +297,33 @@ export function DashboardSidebar() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-md px-2 py-2">
+                  <Link href="/dashboard/settings?tab=payments" className="cursor-pointer flex items-center">
+                    <CreditCard className="mr-2.5 h-4 w-4" />
+                    <span>Payments</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-md px-2 py-2">
+                  <Link href="/dashboard/settings?tab=domain" className="cursor-pointer flex items-center">
+                    <LinkIcon className="mr-2.5 h-4 w-4" />
+                    <span>Custom Domain</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-md px-2 py-2">
                   <Link href="/dashboard/settings?tab=profile" className="cursor-pointer flex items-center">
                     <User className="mr-2.5 h-4 w-4" />
                     <span>Profile</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-md px-2 py-2">
-                  <Link href="/dashboard/settings?tab=custom_domain" className="cursor-pointer flex items-center">
-                    <Gear className="mr-2.5 h-4 w-4" />
-                    <span>Custom Domain</span>
+                  <Link href="/dashboard/settings?tab=security" className="cursor-pointer flex items-center">
+                    <Shield className="mr-2.5 h-4 w-4" />
+                    <span>Security</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-md px-2 py-2">
+                  <Link href="/dashboard/settings?tab=notifications" className="cursor-pointer flex items-center">
+                    <Bell className="mr-2.5 h-4 w-4" />
+                    <span>Notifications</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem 
