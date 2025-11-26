@@ -19,6 +19,7 @@ import { StorefrontHeader } from "@/components/storefront/header"
 import { StorefrontFooter } from "@/components/storefront/footer"
 import { FloatingButtons } from "@/components/storefront/floating-buttons"
 import { QuickViewModal } from "@/components/storefront/quick-view-modal"
+import { useStorefrontUrl } from "@/lib/use-storefront-url"
 
 interface Store {
   id: string
@@ -110,6 +111,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [currentSlide, setCurrentSlide] = useState(0)
   const { itemCount } = useCart()
+  const { getUrl } = useStorefrontUrl(params.username)
   
   // Quick View Modal state
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
@@ -127,14 +129,14 @@ function StorefrontContent({ params }: { params: { username: string } }) {
       image_url: "/placeholder-banner-1.jpg",
       title: "New Collection",
       subtitle: "Shop the latest arrivals",
-      link: `/${params.username}/products`
+      link: getUrl('/products')
     },
     {
       id: 2,
       image_url: "/placeholder-banner-2.jpg",
       title: "Special Offers",
       subtitle: "Up to 50% off",
-      link: `/${params.username}/products`
+      link: getUrl('/products')
     }
   ]
 
@@ -402,7 +404,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
               {categories.map((category) => (
                 <Link
                   key={category.id}
-                  href={`/${params.username}/category/${category.slug}`}
+                  href={getUrl(`/category/${category.slug}`)}
                   className="group relative aspect-square rounded-lg overflow-hidden bg-gray-100"
                 >
                   {category.image_url ? (
@@ -443,7 +445,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
               <h2 className="text-lg font-bold tracking-wide shrink-0">{categoryData.name.toUpperCase()}</h2>
               <div className="flex-1 h-px bg-black/10" />
               <Link 
-                href={`/${params.username}/category/${categoryData.slug}`}
+                href={getUrl(`/category/${categoryData.slug}`)}
                 className="text-sm font-medium hover:underline shrink-0"
                 style={{ color: themeColor }}
               >
@@ -458,6 +460,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
               themeColor={themeColor}
               currency={store?.currency || "BDT"}
               onQuickView={handleQuickView}
+              getUrl={getUrl}
             />
           </div>
         </section>
@@ -480,6 +483,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
                   themeColor={themeColor}
                   currency={store?.currency || "BDT"}
                   onQuickView={handleQuickView}
+                  getUrl={getUrl}
                 />
               ))}
             </div>
@@ -531,13 +535,15 @@ function ProductCarousel({
   username, 
   themeColor,
   currency = "BDT",
-  onQuickView
+  onQuickView,
+  getUrl
 }: { 
   products: Product[]
   username: string
   themeColor: string
   currency?: string
   onQuickView?: (product: Product) => void
+  getUrl: (path?: string) => string
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [showLeftArrow, setShowLeftArrow] = useState(false)
@@ -603,6 +609,7 @@ function ProductCarousel({
               themeColor={themeColor}
               currency={currency}
               onQuickView={onQuickView}
+              getUrl={getUrl}
             />
           </div>
         ))}
@@ -637,13 +644,15 @@ function ProductCard({
   username, 
   themeColor,
   currency = "BDT",
-  onQuickView
+  onQuickView,
+  getUrl
 }: { 
   product: Product
   username: string
   themeColor: string
   currency?: string
   onQuickView?: (product: Product) => void
+  getUrl: (path?: string) => string
 }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isAdding, setIsAdding] = useState(false)
@@ -710,7 +719,7 @@ function ProductCard({
 
   return (
     <div className={`group bg-white border border-black/10 rounded-lg overflow-hidden hover:shadow-lg transition-shadow ${isOutOfStock ? 'opacity-75' : ''}`}>
-      <Link href={`/${username}/products/${product.slug || product.id}`}>
+      <Link href={getUrl(`/products/${product.slug || product.id}`)}>
         <div className="relative aspect-square bg-gray-100 overflow-hidden">
           {productImages.length > 0 ? (
             <>
@@ -782,7 +791,7 @@ function ProductCard({
       </Link>
 
       <div className="p-3">
-        <Link href={`/${username}/products/${product.slug || product.id}`}>
+        <Link href={getUrl(`/products/${product.slug || product.id}`)}>
           <h3 className="text-sm font-medium text-gray-900 line-clamp-2 group-hover:text-gray-600 transition-colors">
             {product.name.toUpperCase()}
           </h3>

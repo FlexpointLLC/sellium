@@ -11,6 +11,7 @@ import {
   Clock,
   Envelope
 } from "phosphor-react"
+import { useStorefrontUrl } from "@/lib/use-storefront-url"
 
 interface Store {
   name: string
@@ -45,6 +46,7 @@ interface StorefrontFooterProps {
 }
 
 export function StorefrontFooter({ store, categories = [], username }: StorefrontFooterProps) {
+  const { getUrl } = useStorefrontUrl(username)
   const themeColor = store.theme_color || "#000000"
 
   return (
@@ -110,10 +112,10 @@ export function StorefrontFooter({ store, categories = [], username }: Storefron
           <div>
             <h3 className="font-bold text-sm tracking-wide mb-4">INFORMATION</h3>
             <ul className="space-y-2 text-sm text-gray-600">
-              <li><Link href={`/${username}/about`} className="hover:text-gray-900">About Us</Link></li>
-              <li><Link href={`/${username}/privacy`} className="hover:text-gray-900">Privacy Policy</Link></li>
-              <li><Link href={`/${username}/shipping`} className="hover:text-gray-900">Shipping Information</Link></li>
-              <li><Link href={`/${username}/returns`} className="hover:text-gray-900">Returns & Refunds</Link></li>
+              <li><Link href={getUrl('/about')} className="hover:text-gray-900">About Us</Link></li>
+              <li><Link href={getUrl('/privacy')} className="hover:text-gray-900">Privacy Policy</Link></li>
+              <li><Link href={getUrl('/shipping')} className="hover:text-gray-900">Shipping Information</Link></li>
+              <li><Link href={getUrl('/returns')} className="hover:text-gray-900">Returns & Refunds</Link></li>
             </ul>
           </div>
 

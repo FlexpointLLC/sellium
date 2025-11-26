@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { ShoppingBag, WhatsappLogo } from "phosphor-react"
 import { useCart } from "@/lib/cart-context"
+import { useStorefrontUrl } from "@/lib/use-storefront-url"
 
 interface FloatingButtonsProps {
   username: string
@@ -12,12 +13,13 @@ interface FloatingButtonsProps {
 
 export function FloatingButtons({ username, themeColor, whatsappNumber }: FloatingButtonsProps) {
   const { itemCount } = useCart()
+  const { getUrl } = useStorefrontUrl(username)
 
   return (
     <>
       {/* Floating Cart Button */}
       <Link 
-        href={`/${username}/cart`}
+        href={getUrl('/cart')}
         className="fixed bottom-6 right-6 z-50"
       >
         <div 

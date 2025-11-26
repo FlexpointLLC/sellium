@@ -19,6 +19,7 @@ import { StorefrontHeader } from "@/components/storefront/header"
 import { StorefrontFooter } from "@/components/storefront/footer"
 import { FloatingButtons } from "@/components/storefront/floating-buttons"
 import { QuickViewModal } from "@/components/storefront/quick-view-modal"
+import { useStorefrontUrl } from "@/lib/use-storefront-url"
 
 interface Product {
   id: string
@@ -102,6 +103,7 @@ function CategoryContent({
   const [sortBy, setSortBy] = useState("newest")
   const [searchQuery, setSearchQuery] = useState("")
   const [error, setError] = useState(false)
+  const { getUrl } = useStorefrontUrl(params.username)
   
   // Quick View Modal state
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
@@ -237,7 +239,7 @@ function CategoryContent({
       <div className="border-b border-black/10 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <nav className="flex items-center gap-2 text-sm text-gray-500">
-            <Link href={`/${params.username}`} className="hover:text-gray-900">Home</Link>
+            <Link href={getUrl()} className="hover:text-gray-900">Home</Link>
             <span>/</span>
             <span className="text-gray-900">{category.name}</span>
           </nav>
@@ -283,7 +285,7 @@ function CategoryContent({
           <div className="text-center py-16">
             <p className="text-gray-500">No products found in this category.</p>
             <Link 
-              href={`/${params.username}`}
+              href={getUrl()}
               className="mt-4 inline-block text-sm font-medium hover:underline"
               style={{ color: themeColor }}
             >
@@ -299,6 +301,7 @@ function CategoryContent({
                 username={params.username}
                 themeColor={themeColor}
                 onQuickView={handleQuickView}
+                getUrl={getUrl}
               />
             ))}
           </div>
@@ -338,13 +341,15 @@ function ProductCard({
   username,
   themeColor,
   currency = "BDT",
-  onQuickView
+  onQuickView,
+  getUrl
 }: { 
   product: Product
   username: string
   themeColor: string
   currency?: string
   onQuickView?: (product: Product) => void
+  getUrl: (path?: string) => string
 }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isHovered, setIsHovered] = useState(false)
@@ -397,7 +402,7 @@ function ProductCard({
 
   return (
     <div className={`group bg-white border border-black/10 rounded-lg overflow-hidden hover:shadow-lg transition-shadow ${isOutOfStock ? 'opacity-75' : ''}`}>
-      <Link href={`/${username}/products/${product.slug || product.id}`}>
+      <Link href={getUrl(`/products/${product.slug || product.id}`)}>
         <div className="relative aspect-square bg-gray-100 overflow-hidden">
           {productImages.length > 0 ? (
             <>
@@ -455,7 +460,7 @@ function ProductCard({
       </Link>
 
       <div className="p-3">
-        <Link href={`/${username}/products/${product.slug || product.id}`}>
+        <Link href={getUrl(`/products/${product.slug || product.id}`)}>
           <h3 className="font-medium text-gray-900 truncate hover:underline">
             {product.name.toUpperCase()}
           </h3>

@@ -11,6 +11,7 @@ import {
 } from "phosphor-react"
 import { Input } from "@/components/ui/input"
 import { useCart } from "@/lib/cart-context"
+import { useStorefrontUrl } from "@/lib/use-storefront-url"
 
 interface Store {
   name: string
@@ -46,6 +47,7 @@ export function StorefrontHeader({
   currentCategorySlug
 }: StorefrontHeaderProps) {
   const { itemCount } = useCart()
+  const { getUrl } = useStorefrontUrl(username)
   const themeColor = store.theme_color || "#000000"
 
   return (
@@ -56,7 +58,7 @@ export function StorefrontHeader({
           <div className="flex items-center h-16 gap-4">
             {/* Logo - Left */}
             <div className="flex-1 flex justify-start">
-              <Link href={`/${username}`} className="flex items-center gap-2 shrink-0">
+              <Link href={getUrl()} className="flex items-center gap-2 shrink-0">
                 {store.logo_url ? (
                   <img src={store.logo_url} alt={store.name} className="h-10 w-auto" />
                 ) : (
@@ -106,7 +108,7 @@ export function StorefrontHeader({
                   <CurrencyDollar className="h-5 w-5" />
                 </button>
                 <Link 
-                  href={`/${username}/cart`}
+                  href={getUrl('/cart')}
                   className="p-2 hover:bg-gray-100 rounded-full transition-colors relative"
                   title="Cart"
                 >
@@ -138,7 +140,7 @@ export function StorefrontHeader({
               {categories.map((category) => (
                 <Link
                   key={category.id}
-                  href={`/${username}/category/${category.slug}`}
+                  href={getUrl(`/category/${category.slug}`)}
                   className={`relative text-sm font-medium whitespace-nowrap transition-colors pb-2 flex-shrink-0 ${
                     category.slug === currentCategorySlug
                       ? "text-gray-900 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-gray-900"

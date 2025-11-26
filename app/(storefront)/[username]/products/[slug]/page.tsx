@@ -26,6 +26,7 @@ import { toast } from "sonner"
 import { StorefrontHeader } from "@/components/storefront/header"
 import { StorefrontFooter } from "@/components/storefront/footer"
 import { FloatingButtons } from "@/components/storefront/floating-buttons"
+import { useStorefrontUrl } from "@/lib/use-storefront-url"
 
 interface Product {
   id: string
@@ -126,6 +127,7 @@ function ProductDetailContent({
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [error, setError] = useState(false)
+  const { getUrl } = useStorefrontUrl(params.username)
   const [searchQuery, setSearchQuery] = useState("")
   const { addItem, removeByProductId, isInCart } = useCart()
   const [addToCartHovered, setAddToCartHovered] = useState(false)
@@ -369,12 +371,12 @@ function ProductDetailContent({
       <div className="border-b border-black/10 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <nav className="flex items-center gap-2 text-sm text-gray-500">
-            <Link href={`/${params.username}`} className="hover:text-gray-900">Home</Link>
+            <Link href={getUrl()} className="hover:text-gray-900">Home</Link>
             <span>/</span>
             {product.category && (
               <>
                 <Link 
-                  href={`/${params.username}/category/${product.category.slug}`}
+                  href={getUrl(`/category/${product.category.slug}`)}
                   className="hover:text-gray-900"
                 >
                   {product.category.name}

@@ -23,6 +23,7 @@ import { CartProvider, useCart } from "@/lib/cart-context"
 import { toast } from "sonner"
 import { StorefrontHeader } from "@/components/storefront/header"
 import { StorefrontFooter } from "@/components/storefront/footer"
+import { useStorefrontUrl } from "@/lib/use-storefront-url"
 
 interface Store {
   id: string
@@ -84,6 +85,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
   const [categories, setCategories] = useState<Category[]>([])
   const [error, setError] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const { getUrl } = useStorefrontUrl(params.username)
   
   const { items, itemCount, subtotal, clearCart } = useCart()
 
@@ -390,7 +392,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href={`/${params.username}`}>
+            <Link href={getUrl()}>
               <Button style={{ backgroundColor: themeColor }} className="text-white">
                 Continue Shopping
               </Button>
@@ -435,11 +437,11 @@ function CheckoutContent({ params }: { params: { username: string } }) {
       <div className="bg-gray-50 border-b border-black/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <nav className="flex items-center gap-2 text-sm">
-            <Link href={`/${params.username}`} className="text-gray-500 hover:text-gray-700">
+            <Link href={getUrl()} className="text-gray-500 hover:text-gray-700">
               Home
             </Link>
             <span className="text-gray-400">/</span>
-            <Link href={`/${params.username}/cart`} className="text-gray-500 hover:text-gray-700">
+            <Link href={getUrl('/cart')} className="text-gray-500 hover:text-gray-700">
               Cart
             </Link>
             <span className="text-gray-400">/</span>
@@ -456,7 +458,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
             <ShoppingBag className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <h2 className="text-xl font-medium text-gray-900 mb-2">Your cart is empty</h2>
             <p className="text-gray-500 mb-6">Add some items to your cart to checkout.</p>
-            <Link href={`/${params.username}`}>
+            <Link href={getUrl()}>
               <Button style={{ backgroundColor: themeColor }} className="text-white">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Continue Shopping
@@ -728,7 +730,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
 
                 {/* Back to Cart */}
                 <Link 
-                  href={`/${params.username}/cart`}
+                  href={getUrl('/cart')}
                   className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" />
