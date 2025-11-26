@@ -1250,13 +1250,13 @@ function SettingsPageContent() {
                                   <div>
                                     <p className="text-xs text-muted-foreground mb-1">Value</p>
                                     <div className="flex items-center gap-1">
-                                      <p className="font-mono text-xs">76.76.21.21</p>
+                                      <p className="font-mono text-xs">216.198.79.1</p>
                                       <button
-                                        onClick={() => copyToClipboard("76.76.21.21")}
+                                        onClick={() => copyToClipboard("216.198.79.1")}
                                         className="p-1 hover:bg-muted rounded transition-colors"
                                         title="Copy"
                                       >
-                                        {copiedValue === "76.76.21.21" ? (
+                                        {copiedValue === "216.198.79.1" ? (
                                           <Check className="h-3 w-3 text-green-500" />
                                         ) : (
                                           <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
