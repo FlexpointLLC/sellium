@@ -40,6 +40,12 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
     
+    // Skip auth routes on custom domains - they shouldn't exist there
+    if (pathname === '/login' || pathname === '/verify' || pathname.startsWith('/auth/') || pathname.startsWith('/dashboard') || pathname === '/onboarding') {
+      // Redirect auth routes to the main admin domain
+      return NextResponse.redirect(new URL(pathname, 'https://admin.sellium.store'))
+    }
+    
     try {
       // Create Supabase client for edge
       const supabase = createClient(
@@ -47,14 +53,15 @@ export async function middleware(request: NextRequest) {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       )
       
-      // Look up the store by custom domain
+      // Look up the store by custom domain (check ANY status, not just verified)
       const domain = hostname.split(':')[0].toLowerCase()
       const { data: domainData } = await supabase
         .from('custom_domains')
         .select('store_id, status')
         .eq('domain', domain)
-        .eq('status', 'verified')
         .single()
+      
+      console.log('Custom domain lookup:', domain, domainData)
       
       if (domainData) {
         // Get the store username
@@ -66,7 +73,7 @@ export async function middleware(request: NextRequest) {
         
         if (store?.username) {
           // Rewrite the URL to the store's path
-          // e.g., blenko.store/products -> /blenko/products
+          // e.g., blenko.store/products -> /flexa/products
           const url = request.nextUrl.clone()
           
           if (pathname === '/') {
@@ -75,11 +82,13 @@ export async function middleware(request: NextRequest) {
             url.pathname = `/${store.username}${pathname}`
           }
           
+          console.log('Rewriting custom domain:', domain, 'to', url.pathname)
           return NextResponse.rewrite(url)
         }
       }
       
-      // Domain not found or not verified - show 404 or redirect
+      // Domain not found in database - just serve the root storefront or 404
+      console.log('Custom domain not found in database:', domain)
       return NextResponse.next()
     } catch (error) {
       console.error('Custom domain lookup error:', error)

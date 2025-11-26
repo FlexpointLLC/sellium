@@ -67,17 +67,19 @@ export async function POST(request: NextRequest) {
     // Generate verification token
     const verificationToken = `sellium-verify-${storeId.slice(0, 8)}-${Date.now().toString(36)}`
 
-    // Save domain to Supabase
+    // ALWAYS set as pending when adding - user must manually verify DNS
+    // This ensures DNS configuration is shown even if Vercel returns verified:true
+    // (Vercel sometimes returns verified:true incorrectly for domains not yet configured)
     const { data: domainData, error: dbError } = await supabase
       .from("custom_domains")
       .upsert({
         store_id: storeId,
         domain: domain.toLowerCase(),
-        status: vercelData.verified ? "verified" : "pending",
-        ssl_status: vercelData.verified ? "active" : "pending",
+        status: "pending",  // Always start as pending
+        ssl_status: "pending",
         verification_token: verificationToken,
-        dns_configured: vercelData.verified,
-        verified_at: vercelData.verified ? new Date().toISOString() : null,
+        dns_configured: false,  // User must verify
+        verified_at: null,
         last_checked_at: new Date().toISOString(),
       }, {
         onConflict: "store_id"
@@ -96,7 +98,8 @@ export async function POST(request: NextRequest) {
       success: true,
       domain: domainData,
       vercel: {
-        verified: vercelData.verified,
+        // Always return false for new domains - user must click "Verify DNS"
+        verified: false,
         verification: vercelData.verification || [],
         apexName: vercelData.apexName,
         name: vercelData.name,
@@ -163,27 +166,61 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Update domain status in Supabase
-    const newStatus = vercelData.verified ? "verified" : "pending"
-    const newSslStatus = vercelData.verified ? "active" : "pending"
+    // Do a real DNS check using DNS-over-HTTPS (Cloudflare)
+    // This verifies the domain actually points to Vercel's IP
+    let dnsVerified = false
+    let dnsError = null
+    
+    try {
+      const dnsResponse = await fetch(
+        `https://cloudflare-dns.com/dns-query?name=${domain}&type=A`,
+        { headers: { "Accept": "application/dns-json" } }
+      )
+      const dnsData = await dnsResponse.json()
+      console.log("DNS check response:", JSON.stringify(dnsData, null, 2))
+      
+      // Check if any A record points to Vercel's IPs
+      const vercelIPs = ["76.76.21.21", "216.198.79.1"]
+      if (dnsData.Answer) {
+        dnsVerified = dnsData.Answer.some((record: { type: number; data: string }) => 
+          record.type === 1 && vercelIPs.includes(record.data)
+        )
+      }
+      
+      if (!dnsVerified) {
+        dnsError = `DNS A record not pointing to Vercel. Expected: ${vercelIPs.join(" or ")}`
+      }
+    } catch (e) {
+      console.error("DNS check error:", e)
+      dnsError = "Could not verify DNS records"
+    }
+
+    // Only mark as verified if BOTH Vercel says verified AND DNS actually points to Vercel
+    const isActuallyVerified = vercelData.verified && dnsVerified
+    const newStatus = isActuallyVerified ? "verified" : "pending"
+    const newSslStatus = isActuallyVerified ? "active" : "pending"
 
     await supabase
       .from("custom_domains")
       .update({
         status: newStatus,
         ssl_status: newSslStatus,
-        dns_configured: vercelData.verified,
-        verified_at: vercelData.verified ? new Date().toISOString() : null,
+        dns_configured: isActuallyVerified,
+        verified_at: isActuallyVerified ? new Date().toISOString() : null,
         last_checked_at: new Date().toISOString(),
+        error_message: !isActuallyVerified ? dnsError : null,
       })
       .eq("store_id", storeId)
 
     return NextResponse.json({
-      verified: vercelData.verified,
+      verified: isActuallyVerified,
       verification: vercelData.verification || [],
       status: newStatus,
       ssl_status: newSslStatus,
-      // Include raw Vercel data for debugging
+      dnsCheck: {
+        verified: dnsVerified,
+        error: dnsError,
+      },
       vercelConfig: {
         apexName: vercelData.apexName,
         verified: vercelData.verified,
