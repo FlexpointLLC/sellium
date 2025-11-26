@@ -20,6 +20,8 @@ function VerifyForm() {
   const [countdown, setCountdown] = useState(0)
   
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const formRef = useRef<HTMLFormElement | null>(null)
+  const hasAutoSubmitted = useRef(false)
 
   // Focus first input on mount
   useEffect(() => {
@@ -33,6 +35,24 @@ function VerifyForm() {
       return () => clearTimeout(timer)
     }
   }, [countdown])
+
+  // Auto-submit when all 6 digits are entered
+  useEffect(() => {
+    const code = otp.join("")
+    if (code.length === 6 && !loading && !hasAutoSubmitted.current) {
+      hasAutoSubmitted.current = true
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        if (formRef.current) {
+          formRef.current.requestSubmit()
+        }
+      }, 100)
+    }
+    // Reset flag when OTP changes (user edits)
+    if (code.length < 6) {
+      hasAutoSubmitted.current = false
+    }
+  }, [otp, loading])
 
   const handleChange = (index: number, value: string) => {
     // Only allow numbers
@@ -95,11 +115,13 @@ function VerifyForm() {
     
     if (code.length !== 6) {
       setError("Please enter all 6 digits")
+      hasAutoSubmitted.current = false
       return
     }
 
     setError(null)
     setLoading(true)
+    hasAutoSubmitted.current = true
 
     try {
       // Verify OTP with Supabase
@@ -112,6 +134,7 @@ function VerifyForm() {
       if (error) {
         setError(error.message)
         setLoading(false)
+        hasAutoSubmitted.current = false
         return
       }
       
@@ -121,6 +144,7 @@ function VerifyForm() {
     } catch (err) {
       setError("Invalid verification code. Please try again.")
       setLoading(false)
+      hasAutoSubmitted.current = false
     }
   }
 
@@ -188,7 +212,7 @@ function VerifyForm() {
           </p>
         </div>
 
-        <form onSubmit={handleVerify} className="space-y-4">
+        <form ref={formRef} onSubmit={handleVerify} className="space-y-4">
           {error && (
             <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
               {error}
