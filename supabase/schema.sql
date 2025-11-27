@@ -178,6 +178,12 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'payment_status') THEN
     ALTER TABLE public.orders ADD COLUMN payment_status TEXT DEFAULT 'pending';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'payment_method') THEN
+    ALTER TABLE public.orders ADD COLUMN payment_method TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'transaction_id') THEN
+    ALTER TABLE public.orders ADD COLUMN transaction_id TEXT;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'fulfillment_status') THEN
     ALTER TABLE public.orders ADD COLUMN fulfillment_status TEXT DEFAULT 'unfulfilled';
   END IF;
@@ -439,6 +445,8 @@ CREATE TABLE IF NOT EXISTS public.orders (
   customer_phone TEXT,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded')),
   payment_status TEXT DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'failed', 'refunded', 'partially_refunded')),
+  payment_method TEXT,
+  transaction_id TEXT,
   fulfillment_status TEXT DEFAULT 'unfulfilled' CHECK (fulfillment_status IN ('unfulfilled', 'partially_fulfilled', 'fulfilled')),
   subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0,
   discount_amount DECIMAL(10, 2) DEFAULT 0,
@@ -807,6 +815,19 @@ CREATE POLICY "Store owners can manage customer addresses" ON public.customer_ad
     )
   );
 
+-- Allow public to create and view customers (for storefront checkout)
+DROP POLICY IF EXISTS "Public can create customers" ON public.customers;
+CREATE POLICY "Public can create customers" ON public.customers
+  FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public can view customers" ON public.customers;
+CREATE POLICY "Public can view customers" ON public.customers
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public can update customers" ON public.customers;
+CREATE POLICY "Public can update customers" ON public.customers
+  FOR UPDATE USING (true);
+
 -- Orders policies
 CREATE POLICY "Store owners can manage orders" ON public.orders
   FOR ALL USING (
@@ -816,6 +837,21 @@ CREATE POLICY "Store owners can manage orders" ON public.orders
       AND stores.user_id = auth.uid()
     )
   );
+
+-- Allow public to create orders (for storefront checkout)
+DROP POLICY IF EXISTS "Public can create orders" ON public.orders;
+CREATE POLICY "Public can create orders" ON public.orders
+  FOR INSERT WITH CHECK (true);
+
+-- Allow public to view their own orders by order_number
+DROP POLICY IF EXISTS "Public can view orders by order number" ON public.orders;
+CREATE POLICY "Public can view orders by order number" ON public.orders
+  FOR SELECT USING (true);
+
+-- Allow public to update order payment status (for payment callbacks)
+DROP POLICY IF EXISTS "Public can update order payment status" ON public.orders;
+CREATE POLICY "Public can update order payment status" ON public.orders
+  FOR UPDATE USING (true);
 
 -- Order items policies
 CREATE POLICY "Store owners can manage order items" ON public.order_items
@@ -827,6 +863,11 @@ CREATE POLICY "Store owners can manage order items" ON public.order_items
       AND stores.user_id = auth.uid()
     )
   );
+
+-- Allow public to create order items (for storefront checkout)
+DROP POLICY IF EXISTS "Public can create order items" ON public.order_items;
+CREATE POLICY "Public can create order items" ON public.order_items
+  FOR INSERT WITH CHECK (true);
 
 -- Transactions policies
 CREATE POLICY "Store owners can view transactions" ON public.transactions

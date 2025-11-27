@@ -44,6 +44,7 @@ interface OrderDetails {
   status: string
   payment_status: string
   payment_method: string | null
+  transaction_id: string | null
   subtotal: number
   shipping_cost: number
   tax: number
@@ -69,6 +70,8 @@ interface Order {
   customer_email: string
   status: string
   payment_status: string
+  payment_method: string | null
+  transaction_id: string | null
   total: number
   created_at: string
   item_count?: number
@@ -165,6 +168,8 @@ export default function OrdersPage() {
         customer_email,
         status,
         payment_status,
+        payment_method,
+        transaction_id,
         total,
         created_at
       `)
@@ -304,6 +309,7 @@ export default function OrdersPage() {
       status: orderData.status,
       payment_status: orderData.payment_status,
       payment_method: orderData.payment_method,
+      transaction_id: orderData.transaction_id,
       subtotal: orderData.subtotal || orderData.total,
       shipping_cost: orderData.shipping_cost || 0,
       tax: orderData.tax || 0,
@@ -416,6 +422,7 @@ export default function OrdersPage() {
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Total</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Status</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Payment</th>
+              <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Method</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Date</th>
               <th className="px-6 py-3 w-12"></th>
             </tr>
@@ -423,7 +430,7 @@ export default function OrdersPage() {
           <tbody>
             {filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={9}>
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <ShoppingCart className="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <p className="text-muted-foreground">
@@ -496,6 +503,17 @@ export default function OrdersPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-sm capitalize">
+                      {order.payment_method === "cod" ? "COD" :
+                       order.payment_method === "bkash" ? "bKash" :
+                       order.payment_method === "bkash_manual" ? "bKash" :
+                       order.payment_method === "nagad" ? "Nagad" :
+                       order.payment_method === "nagad_manual" ? "Nagad" :
+                       order.payment_method === "card" ? "Card" :
+                       order.payment_method || "-"}
+                    </span>
                   </td>
                   <td className="px-6 py-4 text-muted-foreground">{formatDate(order.created_at)}</td>
                   <td className="px-6 py-4">
@@ -626,7 +644,21 @@ export default function OrdersPage() {
                   {selectedOrder.payment_method && (
                     <div>
                       <p className="text-muted-foreground">Payment Method</p>
-                      <p className="font-medium capitalize">{selectedOrder.payment_method}</p>
+                      <p className="font-medium capitalize">
+                        {selectedOrder.payment_method === "cod" ? "Cash on Delivery" :
+                         selectedOrder.payment_method === "bkash" ? "bKash" :
+                         selectedOrder.payment_method === "bkash_manual" ? "bKash (Manual)" :
+                         selectedOrder.payment_method === "nagad" ? "Nagad" :
+                         selectedOrder.payment_method === "nagad_manual" ? "Nagad (Manual)" :
+                         selectedOrder.payment_method === "card" ? "Card Payment" :
+                         selectedOrder.payment_method}
+                      </p>
+                    </div>
+                  )}
+                  {selectedOrder.transaction_id && (
+                    <div>
+                      <p className="text-muted-foreground">Transaction ID</p>
+                      <p className="font-medium font-mono text-sm">{selectedOrder.transaction_id}</p>
                     </div>
                   )}
                 </div>

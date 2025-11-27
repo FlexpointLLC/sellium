@@ -100,6 +100,17 @@ function CheckoutContent({ params }: { params: { username: string } }) {
     nagad: true,
     card: false
   })
+  const [paymentConfig, setPaymentConfig] = useState<{
+    bkash: { mode: string; number: string; instruction: string };
+    nagad: { mode: string; number: string; instruction: string };
+  }>({
+    bkash: { mode: "manual", number: "", instruction: "" },
+    nagad: { mode: "manual", number: "", instruction: "" }
+  })
+  const [manualPaymentData, setManualPaymentData] = useState({
+    transactionId: "",
+    confirmed: false
+  })
   const [shippingCost, setShippingCost] = useState(0)
   const [freeShipping, setFreeShipping] = useState(true)
   
@@ -176,6 +187,22 @@ function CheckoutContent({ params }: { params: { username: string } }) {
       if (paymentData.shipping) {
         setFreeShipping(paymentData.shipping.free_shipping !== undefined ? paymentData.shipping.free_shipping : true)
         setShippingCost(paymentData.shipping.shipping_cost || 0)
+      }
+
+      // Set payment configuration for manual mode
+      if (paymentData.bkash || paymentData.nagad) {
+        setPaymentConfig({
+          bkash: {
+            mode: paymentData.bkash?.mode || "manual",
+            number: paymentData.bkash?.number || "",
+            instruction: paymentData.bkash?.instruction || ""
+          },
+          nagad: {
+            mode: paymentData.nagad?.mode || "manual",
+            number: paymentData.nagad?.number || "",
+            instruction: paymentData.nagad?.instruction || ""
+          }
+        })
       }
     }
 
@@ -291,7 +318,8 @@ function CheckoutContent({ params }: { params: { username: string } }) {
           total: total,
           currency: store?.currency || "BDT",
           status: "pending",
-          payment_status: formData.paymentMethod === "cod" ? "pending" : "pending",
+          payment_status: "pending",
+          payment_method: formData.paymentMethod,
           fulfillment_status: "unfulfilled",
           notes: formData.notes || null,
           source: "web"
@@ -379,7 +407,116 @@ function CheckoutContent({ params }: { params: { username: string } }) {
         }
       }
 
-      // Clear cart and show success
+      // Handle payment based on method
+      if (formData.paymentMethod === "bkash") {
+        // Check if manual mode
+        if (paymentConfig.bkash.mode === "manual") {
+          // Manual bKash payment - update order with transaction details
+          await supabase
+            .from("orders")
+            .update({
+              payment_status: "pending", // Needs verification
+              payment_method: "bkash_manual",
+              transaction_id: manualPaymentData.transactionId,
+            })
+            .eq("id", orderData.id)
+
+          // Clear cart and show success
+          clearCart()
+          setOrderId(orderNumber)
+          setOrderPlaced(true)
+          toast.success("Order placed successfully! We will verify your payment.")
+          setSubmitting(false)
+          return
+        }
+
+        // API mode - Create bKash payment and redirect
+        const callbackURL = `${window.location.origin}/${params.username}/checkout/payment-callback?method=bkash&orderId=${orderData.id}&storeId=${store?.id}`
+        
+        const bkashResponse = await fetch("/api/payments/bkash/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId: store?.id,
+            amount: total,
+            orderId: orderNumber,
+            callbackURL: callbackURL,
+          }),
+        })
+
+        const bkashData = await bkashResponse.json()
+
+        if (bkashData.success && bkashData.bkashURL) {
+          // Redirect to bKash payment page
+          window.location.href = bkashData.bkashURL
+          return
+        } else {
+          // Payment creation failed - update order status
+          await supabase
+            .from("orders")
+            .update({ payment_status: "failed" })
+            .eq("id", orderData.id)
+          
+          toast.error(bkashData.error || "Failed to initiate bKash payment")
+          setSubmitting(false)
+          return
+        }
+      } else if (formData.paymentMethod === "nagad") {
+        // Check if manual mode
+        if (paymentConfig.nagad.mode === "manual") {
+          // Manual Nagad payment - update order with transaction details
+          await supabase
+            .from("orders")
+            .update({
+              payment_status: "pending", // Needs verification
+              payment_method: "nagad_manual",
+              transaction_id: manualPaymentData.transactionId,
+            })
+            .eq("id", orderData.id)
+
+          // Clear cart and show success
+          clearCart()
+          setOrderId(orderNumber)
+          setOrderPlaced(true)
+          toast.success("Order placed successfully! We will verify your payment.")
+          setSubmitting(false)
+          return
+        }
+
+        // API mode - Create Nagad payment and redirect
+        const callbackURL = `${window.location.origin}/${params.username}/checkout/payment-callback?method=nagad&orderId=${orderData.id}&storeId=${store?.id}`
+        
+        const nagadResponse = await fetch("/api/payments/nagad/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId: store?.id,
+            amount: total,
+            orderId: orderNumber,
+            callbackURL: callbackURL,
+          }),
+        })
+
+        const nagadData = await nagadResponse.json()
+
+        if (nagadData.success && nagadData.nagadURL) {
+          // Redirect to Nagad payment page
+          window.location.href = nagadData.nagadURL
+          return
+        } else {
+          // Payment creation failed - update order status
+          await supabase
+            .from("orders")
+            .update({ payment_status: "failed" })
+            .eq("id", orderData.id)
+          
+          toast.error(nagadData.error || "Failed to initiate Nagad payment")
+          setSubmitting(false)
+          return
+        }
+      }
+
+      // For COD - Clear cart and show success
       clearCart()
       setOrderId(orderNumber)
       setOrderPlaced(true)
@@ -793,6 +930,80 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                       </label>
                     )}
                   </div>
+
+                  {/* Manual Payment Instructions for bKash */}
+                  {formData.paymentMethod === "bkash" && paymentConfig.bkash.mode === "manual" && (
+                    <div className="mt-4 p-4 rounded-lg border border-pink-200 bg-pink-50">
+                      <div className="flex items-center gap-2 mb-3">
+                        <img src="/bkash.svg" alt="bKash" className="h-6 w-6" />
+                        <span className="font-medium text-pink-900">bKash Payment</span>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="text-sm text-pink-800">
+                          <p className="font-medium mb-1">Send money to: {paymentConfig.bkash.number}</p>
+                          {paymentConfig.bkash.instruction && (
+                            <p className="text-pink-700 whitespace-pre-wrap">{paymentConfig.bkash.instruction}</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="bkashTrxId" className="text-sm font-medium text-pink-900">Transaction ID *</Label>
+                          <Input
+                            id="bkashTrxId"
+                            value={manualPaymentData.transactionId}
+                            onChange={(e) => setManualPaymentData({ ...manualPaymentData, transactionId: e.target.value })}
+                            placeholder="Enter your bKash Transaction ID"
+                            className="mt-1 bg-white border-pink-200 text-gray-900"
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={manualPaymentData.confirmed}
+                            onChange={(e) => setManualPaymentData({ ...manualPaymentData, confirmed: e.target.checked })}
+                            className="w-4 h-4 rounded border-pink-300 text-pink-600 focus:ring-pink-500"
+                          />
+                          <span className="text-sm text-pink-800">Yes, I have sent the payment</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Manual Payment Instructions for Nagad */}
+                  {formData.paymentMethod === "nagad" && paymentConfig.nagad.mode === "manual" && (
+                    <div className="mt-4 p-4 rounded-lg border border-orange-200 bg-orange-50">
+                      <div className="flex items-center gap-2 mb-3">
+                        <img src="/nagad.svg" alt="Nagad" className="h-6 w-6" />
+                        <span className="font-medium text-orange-900">Nagad Payment</span>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="text-sm text-orange-800">
+                          <p className="font-medium mb-1">Send money to: {paymentConfig.nagad.number}</p>
+                          {paymentConfig.nagad.instruction && (
+                            <p className="text-orange-700 whitespace-pre-wrap">{paymentConfig.nagad.instruction}</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="nagadTrxId" className="text-sm font-medium text-orange-900">Transaction ID *</Label>
+                          <Input
+                            id="nagadTrxId"
+                            value={manualPaymentData.transactionId}
+                            onChange={(e) => setManualPaymentData({ ...manualPaymentData, transactionId: e.target.value })}
+                            placeholder="Enter your Nagad Transaction ID"
+                            className="mt-1 bg-white border-orange-200 text-gray-900"
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={manualPaymentData.confirmed}
+                            onChange={(e) => setManualPaymentData({ ...manualPaymentData, confirmed: e.target.checked })}
+                            className="w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500"
+                          />
+                          <span className="text-sm text-orange-800">Yes, I have sent the payment</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Order Notes */}
@@ -887,13 +1098,22 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                     </span>
                   </div>
 
-                  <Button 
+                  <Button
                     type="submit"
                     className="w-full text-white"
                     style={{ backgroundColor: themeColor }}
-                    disabled={submitting}
+                    disabled={
+                      submitting || 
+                      (formData.paymentMethod === "bkash" && paymentConfig.bkash.mode === "manual" && (!manualPaymentData.confirmed || !manualPaymentData.transactionId)) ||
+                      (formData.paymentMethod === "nagad" && paymentConfig.nagad.mode === "manual" && (!manualPaymentData.confirmed || !manualPaymentData.transactionId))
+                    }
                   >
-                    {submitting ? "Processing..." : "Place Order"}
+                    {submitting ? "Processing..." : 
+                      formData.paymentMethod === "cod" ? "Place Order" :
+                      formData.paymentMethod === "bkash" ? (paymentConfig.bkash.mode === "manual" ? "Place Order" : "Pay with bKash") :
+                      formData.paymentMethod === "nagad" ? (paymentConfig.nagad.mode === "manual" ? "Place Order" : "Pay with Nagad") :
+                      "Proceed to Payment"
+                    }
                   </Button>
 
                   {/* Trust Badges */}

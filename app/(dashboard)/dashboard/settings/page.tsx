@@ -3,11 +3,13 @@
 
 import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise, Copy, Check } from "phosphor-react"
+import Link from "next/link"
+import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise, Copy, Check, Lock } from "phosphor-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -113,6 +115,7 @@ function SettingsPageContent() {
     theme_color: "#22c55e",
     currency: "BDT",
     timezone: "Asia/Dhaka",
+    plan: "free" as string,
     address: {
       street: "",
       city: "",
@@ -152,14 +155,69 @@ function SettingsPageContent() {
   // Payment settings
   const [paymentSettings, setPaymentSettings] = useState({
     payment_methods: {
-      bkash: true,
-      nagad: true,
+      bkash: false,
+      nagad: false,
       card: false,
       cod: true
     },
     payout_method: "bkash",
     payout_account_number: "",
-    payout_account_holder: ""
+    payout_account_holder: "",
+    // Merchant information
+    bkash: {
+      mode: "manual", // "manual" or "api"
+      base_url: "",
+      key: "",
+      username: "",
+      password: "",
+      secret: "",
+      // Manual payment fields
+      number: "",
+      instruction: ""
+    },
+    nagad: {
+      mode: "manual", // "manual" or "api"
+      api_version: "",
+      base_url: "",
+      callback_url: "",
+      merchant_id: "",
+      merchant_number: "",
+      private_key: "",
+      public_key: "",
+      // Manual payment fields
+      number: "",
+      instruction: ""
+    },
+    card: {
+      // Add card merchant fields as needed
+      merchant_id: "",
+      api_key: "",
+      secret_key: ""
+    }
+  })
+
+  // Validation errors for payment fields
+  const [paymentErrors, setPaymentErrors] = useState({
+    bkash: {
+      base_url: false,
+      key: false,
+      username: false,
+      password: false,
+      secret: false,
+      number: false,
+      instruction: false
+    },
+    nagad: {
+      api_version: false,
+      base_url: false,
+      callback_url: false,
+      merchant_id: false,
+      merchant_number: false,
+      number: false,
+      instruction: false,
+      private_key: false,
+      public_key: false
+    }
   })
 
   // Shipping settings
@@ -253,6 +311,7 @@ function SettingsPageContent() {
         theme_color: storeData.theme_color || "#22c55e",
         currency: storeData.currency || "BDT",
         timezone: storeData.timezone || "Asia/Dhaka",
+        plan: storeData.plan || "free",
         address: storeData.address || {
           street: "",
           city: "",
@@ -276,14 +335,41 @@ function SettingsPageContent() {
           : storeData.payment_settings
         setPaymentSettings({
           payment_methods: paymentData.payment_methods || {
-            bkash: true,
-            nagad: true,
+            bkash: false,
+            nagad: false,
             card: false,
             cod: true
           },
           payout_method: paymentData.payout_method || "bkash",
           payout_account_number: paymentData.payout_account_number || "",
-          payout_account_holder: paymentData.payout_account_holder || ""
+          payout_account_holder: paymentData.payout_account_holder || "",
+          bkash: {
+            mode: paymentData.bkash?.mode || "manual",
+            base_url: paymentData.bkash?.base_url || "",
+            key: paymentData.bkash?.key || "",
+            username: paymentData.bkash?.username || "",
+            password: paymentData.bkash?.password || "",
+            secret: paymentData.bkash?.secret || "",
+            number: paymentData.bkash?.number || "",
+            instruction: paymentData.bkash?.instruction || ""
+          },
+          nagad: {
+            mode: paymentData.nagad?.mode || "manual",
+            api_version: paymentData.nagad?.api_version || "",
+            base_url: paymentData.nagad?.base_url || "",
+            callback_url: paymentData.nagad?.callback_url || "",
+            merchant_id: paymentData.nagad?.merchant_id || "",
+            merchant_number: paymentData.nagad?.merchant_number || "",
+            private_key: paymentData.nagad?.private_key || "",
+            public_key: paymentData.nagad?.public_key || "",
+            number: paymentData.nagad?.number || "",
+            instruction: paymentData.nagad?.instruction || ""
+          },
+          card: paymentData.card || {
+            merchant_id: "",
+            api_key: "",
+            secret_key: ""
+          }
         })
       }
 
@@ -631,6 +717,70 @@ function SettingsPageContent() {
 
   async function handleSavePayments() {
     if (!storeId) return
+    
+    let hasErrors = false;
+    const newBkashErrors = {
+      base_url: false,
+      key: false,
+      username: false,
+      password: false,
+      secret: false,
+      number: false,
+      instruction: false
+    };
+    const newNagadErrors = {
+      api_version: false,
+      base_url: false,
+      callback_url: false,
+      merchant_id: false,
+      merchant_number: false,
+      private_key: false,
+      public_key: false,
+      number: false,
+      instruction: false
+    };
+
+    // Validate bKash fields if enabled
+    if (paymentSettings.payment_methods.bkash) {
+      if (paymentSettings.bkash.mode === "api") {
+        const { base_url, key, username, password, secret } = paymentSettings.bkash;
+        if (!base_url) { newBkashErrors.base_url = true; hasErrors = true; }
+        if (!key) { newBkashErrors.key = true; hasErrors = true; }
+        if (!username) { newBkashErrors.username = true; hasErrors = true; }
+        if (!password) { newBkashErrors.password = true; hasErrors = true; }
+        if (!secret) { newBkashErrors.secret = true; hasErrors = true; }
+      } else {
+        // Manual mode - validate number
+        if (!paymentSettings.bkash.number) { newBkashErrors.number = true; hasErrors = true; }
+      }
+    }
+
+    // Validate Nagad fields if enabled
+    if (paymentSettings.payment_methods.nagad) {
+      if (paymentSettings.nagad.mode === "api") {
+        const { api_version, base_url, callback_url, merchant_id, merchant_number, private_key, public_key } = paymentSettings.nagad;
+        if (!api_version) { newNagadErrors.api_version = true; hasErrors = true; }
+        if (!base_url) { newNagadErrors.base_url = true; hasErrors = true; }
+        if (!callback_url) { newNagadErrors.callback_url = true; hasErrors = true; }
+        if (!merchant_id) { newNagadErrors.merchant_id = true; hasErrors = true; }
+        if (!merchant_number) { newNagadErrors.merchant_number = true; hasErrors = true; }
+        if (!private_key) { newNagadErrors.private_key = true; hasErrors = true; }
+        if (!public_key) { newNagadErrors.public_key = true; hasErrors = true; }
+      } else {
+        // Manual mode - validate number
+        if (!paymentSettings.nagad.number) { newNagadErrors.number = true; hasErrors = true; }
+      }
+    }
+
+    setPaymentErrors({
+      bkash: newBkashErrors,
+      nagad: newNagadErrors
+    });
+
+    if (hasErrors) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
     
     setSaving(true)
     
@@ -1606,11 +1756,33 @@ function SettingsPageContent() {
 
                 {/* Add Custom Domain */}
                 <div className="space-y-4 pt-4 border-t border-border/50">
+                  <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium">Custom Domain</h3>
+                    {store.plan === 'free' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-orange-500/10 text-orange-600 dark:text-orange-500 rounded border border-orange-500/30">
+                        <Lock className="h-3 w-3" weight="fill" />
+                        Paid
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground">
                     Use your own domain (e.g., shop.yourbrand.com) instead of the default Sellium subdomain.
                   </p>
                   
+                  {store.plan === 'free' ? (
+                    <div className="p-4 border border-border/50 rounded-lg bg-muted/50 space-y-3">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Lock className="h-4 w-4" weight="fill" />
+                        <span>Custom domain is available for Paid plan users only.</span>
+                      </div>
+                      <Link
+                        href="/dashboard/settings?tab=billing"
+                        className="inline-flex items-center px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-medium rounded-md transition-colors"
+                      >
+                        Upgrade to Paid
+                      </Link>
+                    </div>
+                  ) : (
                   <div className="space-y-4">
                     {/* Show input only if no domain configured */}
                     {customDomain.status === "not_configured" && (
@@ -1958,6 +2130,7 @@ function SettingsPageContent() {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
 
                 {/* Help Section */}
@@ -2172,11 +2345,21 @@ function SettingsPageContent() {
                 {/* Payment Methods */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium">Accepted Payment Methods</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
+                  <div className="space-y-6">
+                    {/* Bkash */}
+                    <div className="space-y-4 p-4 border border-border/50 rounded-lg">
+                      <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded bg-green-500/10 flex items-center justify-center">
-                          <span className="text-green-600 font-bold text-sm">bK</span>
+                        <div className="h-10 w-10 rounded flex items-center justify-center p-1">
+                          <img 
+                            src="/bkash.svg" 
+                            alt="bKash" 
+                            className="w-full h-full"
+                            onError={(e) => {
+                              console.error('Bkash image failed to load');
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
                         </div>
                         <div>
                           <p className="text-sm font-medium">bKash</p>
@@ -2196,10 +2379,230 @@ function SettingsPageContent() {
                         }
                       />
                     </div>
-                    <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
+                      {paymentSettings.payment_methods.bkash && (
+                        <div className="mt-4 p-4 rounded-lg bg-muted/20 border border-border">
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-sm font-medium">bKash Configuration</h4>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs ${paymentSettings.bkash.mode === 'manual' ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>Manual</span>
+                              <Switch 
+                                checked={paymentSettings.bkash.mode === 'api'}
+                                onCheckedChange={(checked) => 
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    bkash: {
+                                      ...paymentSettings.bkash,
+                                      mode: checked ? 'api' : 'manual'
+                                    }
+                                  })
+                                }
+                              />
+                              <span className={`text-xs ${paymentSettings.bkash.mode === 'api' ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>Merchant API</span>
+                            </div>
+                          </div>
+                          
+                          {paymentSettings.bkash.mode === 'manual' ? (
+                            <div className="space-y-4">
+                              <p className="text-xs text-muted-foreground">
+                                Customers will send payment manually to your bKash number.
+                              </p>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium">bKash Number</Label>
+                                <Input 
+                                  placeholder="01XXXXXXXXX"
+                                  value={paymentSettings.bkash.number}
+                                  onChange={(e) => {
+                                    setPaymentSettings({
+                                      ...paymentSettings,
+                                      bkash: {
+                                        ...paymentSettings.bkash,
+                                        number: e.target.value
+                                      }
+                                    })
+                                    if (paymentErrors.bkash.number) {
+                                      setPaymentErrors({
+                                        ...paymentErrors,
+                                        bkash: { ...paymentErrors.bkash, number: false }
+                                      })
+                                    }
+                                  }}
+                                  className={`bg-background ${paymentErrors.bkash.number ? 'border-red-500' : ''}`}
+                                />
+                                {paymentErrors.bkash.number && (
+                                  <p className="text-xs text-red-500">This field is required</p>
+                                )}
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium">Payment Instruction</Label>
+                                <Textarea 
+                                  placeholder="Enter instructions for customers (e.g., Send money to 01XXXXXXXXX and include your order number in the reference)"
+                                  value={paymentSettings.bkash.instruction}
+                                  onChange={(e) => 
+                                    setPaymentSettings({
+                                      ...paymentSettings,
+                                      bkash: {
+                                        ...paymentSettings.bkash,
+                                        instruction: e.target.value
+                                      }
+                                    })
+                                  }
+                                  className="bg-background min-h-[80px]"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium">Base URL</Label>
+                              <Input 
+                                placeholder="https://tokenized.pay.bka.sh/v1.2.0-beta"
+                                value={paymentSettings.bkash.base_url}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    bkash: {
+                                      ...paymentSettings.bkash,
+                                      base_url: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.bkash.base_url) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      bkash: { ...paymentErrors.bkash, base_url: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.bkash.base_url ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.bkash.base_url && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium">App Key</Label>
+                              <Input 
+                                placeholder="Enter your bKash app key"
+                                value={paymentSettings.bkash.key}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    bkash: {
+                                      ...paymentSettings.bkash,
+                                      key: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.bkash.key) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      bkash: { ...paymentErrors.bkash, key: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.bkash.key ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.bkash.key && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium">Username</Label>
+                              <Input 
+                                placeholder="Enter your bKash username"
+                                value={paymentSettings.bkash.username}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    bkash: {
+                                      ...paymentSettings.bkash,
+                                      username: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.bkash.username) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      bkash: { ...paymentErrors.bkash, username: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.bkash.username ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.bkash.username && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium">Password</Label>
+                              <Input 
+                                type="password"
+                                placeholder="••••••••"
+                                value={paymentSettings.bkash.password}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    bkash: {
+                                      ...paymentSettings.bkash,
+                                      password: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.bkash.password) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      bkash: { ...paymentErrors.bkash, password: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.bkash.password ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.bkash.password && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                            <div className="space-y-2 md:col-span-2">
+                              <Label className="text-xs font-medium">App Secret</Label>
+                              <Input 
+                                type="password"
+                                placeholder="••••••••••••••••"
+                                value={paymentSettings.bkash.secret}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    bkash: {
+                                      ...paymentSettings.bkash,
+                                      secret: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.bkash.secret) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      bkash: { ...paymentErrors.bkash, secret: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.bkash.secret ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.bkash.secret && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                          </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {/* Nagad */}
+                    <div className="space-y-4 p-4 border border-border/50 rounded-lg">
+                      <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded bg-orange-500/10 flex items-center justify-center">
-                          <span className="text-orange-600 font-bold text-sm">Ng</span>
+                        <div className="h-10 w-10 rounded flex items-center justify-center p-1">
+                          <img 
+                            src="/nagad.svg" 
+                            alt="Nagad" 
+                            className="w-full h-full"
+                            onError={(e) => {
+                              console.error('Nagad image failed to load');
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
                         </div>
                         <div>
                           <p className="text-sm font-medium">Nagad</p>
@@ -2219,7 +2622,272 @@ function SettingsPageContent() {
                         }
                       />
                     </div>
-                    <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
+                      {paymentSettings.payment_methods.nagad && (
+                        <div className="mt-4 p-4 rounded-lg bg-muted/20 border border-border">
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-sm font-medium">Nagad Configuration</h4>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs ${paymentSettings.nagad.mode === 'manual' ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>Manual</span>
+                              <Switch 
+                                checked={paymentSettings.nagad.mode === 'api'}
+                                onCheckedChange={(checked) => 
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    nagad: {
+                                      ...paymentSettings.nagad,
+                                      mode: checked ? 'api' : 'manual'
+                                    }
+                                  })
+                                }
+                              />
+                              <span className={`text-xs ${paymentSettings.nagad.mode === 'api' ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>Merchant API</span>
+                            </div>
+                          </div>
+                          
+                          {paymentSettings.nagad.mode === 'manual' ? (
+                            <div className="space-y-4">
+                              <p className="text-xs text-muted-foreground">
+                                Customers will send payment manually to your Nagad number.
+                              </p>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium">Nagad Number</Label>
+                                <Input 
+                                  placeholder="01XXXXXXXXX"
+                                  value={paymentSettings.nagad.number}
+                                  onChange={(e) => {
+                                    setPaymentSettings({
+                                      ...paymentSettings,
+                                      nagad: {
+                                        ...paymentSettings.nagad,
+                                        number: e.target.value
+                                      }
+                                    })
+                                    if (paymentErrors.nagad.number) {
+                                      setPaymentErrors({
+                                        ...paymentErrors,
+                                        nagad: { ...paymentErrors.nagad, number: false }
+                                      })
+                                    }
+                                  }}
+                                  className={`bg-background ${paymentErrors.nagad.number ? 'border-red-500' : ''}`}
+                                />
+                                {paymentErrors.nagad.number && (
+                                  <p className="text-xs text-red-500">This field is required</p>
+                                )}
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium">Payment Instruction</Label>
+                                <Textarea 
+                                  placeholder="Enter instructions for customers (e.g., Send money to 01XXXXXXXXX and include your order number in the reference)"
+                                  value={paymentSettings.nagad.instruction}
+                                  onChange={(e) => 
+                                    setPaymentSettings({
+                                      ...paymentSettings,
+                                      nagad: {
+                                        ...paymentSettings.nagad,
+                                        instruction: e.target.value
+                                      }
+                                    })
+                                  }
+                                  className="bg-background min-h-[80px]"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium">API Version</Label>
+                              <Input 
+                                placeholder="v1"
+                                value={paymentSettings.nagad.api_version}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    nagad: {
+                                      ...paymentSettings.nagad,
+                                      api_version: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.nagad.api_version) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      nagad: { ...paymentErrors.nagad, api_version: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.nagad.api_version ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.nagad.api_version && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium">Base URL</Label>
+                              <Input 
+                                placeholder="https://api.mynagad.com"
+                                value={paymentSettings.nagad.base_url}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    nagad: {
+                                      ...paymentSettings.nagad,
+                                      base_url: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.nagad.base_url) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      nagad: { ...paymentErrors.nagad, base_url: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.nagad.base_url ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.nagad.base_url && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                            <div className="space-y-2 md:col-span-2">
+                              <Label className="text-xs font-medium">Callback URL</Label>
+                              <Input 
+                                placeholder="https://yourdomain.com/api/nagad/callback"
+                                value={paymentSettings.nagad.callback_url}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    nagad: {
+                                      ...paymentSettings.nagad,
+                                      callback_url: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.nagad.callback_url) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      nagad: { ...paymentErrors.nagad, callback_url: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.nagad.callback_url ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.nagad.callback_url && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium">Merchant ID</Label>
+                              <Input 
+                                placeholder="Enter your merchant ID"
+                                value={paymentSettings.nagad.merchant_id}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    nagad: {
+                                      ...paymentSettings.nagad,
+                                      merchant_id: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.nagad.merchant_id) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      nagad: { ...paymentErrors.nagad, merchant_id: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.nagad.merchant_id ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.nagad.merchant_id && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium">Merchant Number</Label>
+                              <Input 
+                                placeholder="01XXXXXXXXX"
+                                value={paymentSettings.nagad.merchant_number}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    nagad: {
+                                      ...paymentSettings.nagad,
+                                      merchant_number: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.nagad.merchant_number) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      nagad: { ...paymentErrors.nagad, merchant_number: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.nagad.merchant_number ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.nagad.merchant_number && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium">Private Key</Label>
+                              <Input 
+                                type="password"
+                                placeholder="••••••••••••••••"
+                                value={paymentSettings.nagad.private_key}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    nagad: {
+                                      ...paymentSettings.nagad,
+                                      private_key: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.nagad.private_key) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      nagad: { ...paymentErrors.nagad, private_key: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.nagad.private_key ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.nagad.private_key && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs font-medium">Public Key</Label>
+                              <Input 
+                                type="password"
+                                placeholder="••••••••••••••••"
+                                value={paymentSettings.nagad.public_key}
+                                onChange={(e) => {
+                                  setPaymentSettings({
+                                    ...paymentSettings,
+                                    nagad: {
+                                      ...paymentSettings.nagad,
+                                      public_key: e.target.value
+                                    }
+                                  })
+                                  if (paymentErrors.nagad.public_key) {
+                                    setPaymentErrors({
+                                      ...paymentErrors,
+                                      nagad: { ...paymentErrors.nagad, public_key: false }
+                                    })
+                                  }
+                                }}
+                                className={`bg-background ${paymentErrors.nagad.public_key ? 'border-red-500' : ''}`}
+                              />
+                              {paymentErrors.nagad.public_key && (
+                                <p className="text-xs text-red-500">This field is required</p>
+                              )}
+                            </div>
+                          </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {/* Card Payment - Hidden for now */}
+                    {false && (
+                    <div className="space-y-4 p-4 border border-border/50 rounded-lg">
+                      <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded bg-blue-500/10 flex items-center justify-center">
                           <CreditCard className="h-5 w-5 text-blue-600" />
@@ -2242,6 +2910,62 @@ function SettingsPageContent() {
                         }
                       />
                     </div>
+                      {paymentSettings.payment_methods.card && (
+                        <div className="space-y-3 pt-3 border-t border-border/50">
+                          <div className="space-y-2">
+                            <Label>Card Merchant ID*</Label>
+                            <Input 
+                              placeholder="Card Merchant ID"
+                              value={paymentSettings.card.merchant_id}
+                              onChange={(e) => 
+                                setPaymentSettings({
+                                  ...paymentSettings,
+                                  card: {
+                                    ...paymentSettings.card,
+                                    merchant_id: e.target.value
+                                  }
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Card API Key*</Label>
+                            <Input 
+                              type="password"
+                              placeholder="Card API Key"
+                              value={paymentSettings.card.api_key}
+                              onChange={(e) => 
+                                setPaymentSettings({
+                                  ...paymentSettings,
+                                  card: {
+                                    ...paymentSettings.card,
+                                    api_key: e.target.value
+                                  }
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Card Secret Key*</Label>
+                            <Input 
+                              type="password"
+                              placeholder="Card Secret Key"
+                              value={paymentSettings.card.secret_key}
+                              onChange={(e) => 
+                                setPaymentSettings({
+                                  ...paymentSettings,
+                                  card: {
+                                    ...paymentSettings.card,
+                                    secret_key: e.target.value
+                                  }
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    )}
                     <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded bg-gray-500/10 flex items-center justify-center">
