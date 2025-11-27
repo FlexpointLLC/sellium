@@ -22,6 +22,9 @@ import {
   Bell,
   Link as LinkIcon,
   Crown,
+  UserCircle,
+  Megaphone,
+  ArrowCircleUp,
 } from "phosphor-react"
 
 import {
@@ -46,6 +49,8 @@ import {
 import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { UpgradeDialog } from "@/components/upgrade-dialog"
 
 const menuGroups = [
   {
@@ -118,6 +123,31 @@ const menuGroups = [
       },
     ],
   },
+  {
+    label: "Admin",
+    items: [
+      {
+        title: "Super Admin",
+        url: "/dashboard/admin",
+        icon: Shield,
+      },
+      {
+        title: "Users",
+        url: "/dashboard/admin/users",
+        icon: UserCircle,
+      },
+      {
+        title: "Notice",
+        url: "/dashboard/admin/notice",
+        icon: Megaphone,
+      },
+      {
+        title: "Upgrade Request",
+        url: "/dashboard/admin/upgrade-requests",
+        icon: ArrowCircleUp,
+      },
+    ],
+  },
 ]
 
 export function DashboardSidebar() {
@@ -129,12 +159,18 @@ export function DashboardSidebar() {
   const [userProfile, setUserProfile] = useState<{
     name: string | null
     avatar_url: string | null
+    role: string | null
   } | null>(null)
   const [storeUsername, setStoreUsername] = useState<string | null>(null)
   const [storePlan, setStorePlan] = useState<string | null>(null)
+  const [storeId, setStoreId] = useState<string | null>(null)
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   
   const isCollapsed = state === "collapsed"
+  
+  // Get user role, default to 'owner' if not set
+  const userRole = userProfile?.role || 'owner'
 
   useEffect(() => {
     async function fetchUserData() {
@@ -145,7 +181,7 @@ export function DashboardSidebar() {
       // Fetch profile
       const { data: profile } = await supabase
         .from("profiles")
-        .select("name, avatar_url")
+        .select("name, avatar_url, role")
         .eq("id", user.id)
         .single()
 
@@ -153,19 +189,21 @@ export function DashboardSidebar() {
         setUserProfile({
           name: profile.name,
           avatar_url: profile.avatar_url,
+          role: profile.role || 'owner',
         })
       }
 
-      // Fetch store username and plan
+      // Fetch store username, plan, and id
       const { data: store } = await supabase
         .from("stores")
-        .select("username, plan")
+        .select("id, username, plan")
         .eq("user_id", user.id)
         .single()
 
       if (store) {
         setStoreUsername(store.username)
         setStorePlan(store.plan || "free")
+        setStoreId(store.id)
       }
 
       setLoading(false)
@@ -197,29 +235,60 @@ export function DashboardSidebar() {
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        {menuGroups.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === item.url}
-                      tooltip={item.title}
-                    >
-                      <Link href={item.url}>
-                        <item.icon className="h-4 w-4" weight={pathname === item.url ? "fill" : "regular"} />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        {menuGroups
+          .filter((group) => {
+            // Filter menu groups based on role
+            if (userRole === 'rider') {
+              // Rider can only see Home and Orders
+              return group.label === 'Overview' || 
+                     (group.label === 'Sales & Customers' && group.items.some(item => item.title === 'Orders'))
+            }
+            if (userRole === 'agent') {
+              // Agent cannot see Finance (Earnings) and Admin section
+              return group.label !== 'Finance' && group.label !== 'Admin'
+            }
+            if (userRole === 'owner') {
+              // Owner cannot see Admin section
+              return group.label !== 'Admin'
+            }
+            // Admin can see everything including Admin section
+            return true
+          })
+          .map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {group.items
+                    .filter((item) => {
+                      // For riders, only show Home and Orders
+                      if (userRole === 'rider') {
+                        return item.title === 'Home' || item.title === 'Orders'
+                      }
+                      // For agents, hide Earnings
+                      if (userRole === 'agent' && item.title === 'Earnings') {
+                        return false
+                      }
+                      return true
+                    })
+                    .map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={pathname === item.url}
+                          tooltip={item.title}
+                        >
+                          <Link href={item.url}>
+                            <item.icon className="h-4 w-4" weight={pathname === item.url ? "fill" : "regular"} />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ))}
       </SidebarContent>
       <SidebarFooter className="p-2 space-y-2">
         {/* Upgrade Banner for Free Plan */}
@@ -235,12 +304,12 @@ export function DashboardSidebar() {
                 Need Custom domain, More traffic, more product limit?
               </p>
               {/* Upgrade Button */}
-              <Link
-                href="/dashboard/settings?tab=billing"
-                className="block w-full px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-medium rounded-md transition-colors text-center"
+              <Button
+                onClick={() => setUpgradeDialogOpen(true)}
+                className="w-full px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-medium rounded-md transition-colors"
               >
                 Upgrade
-              </Link>
+              </Button>
             </div>
           </div>
         )}
@@ -366,6 +435,16 @@ export function DashboardSidebar() {
           </DropdownMenu>
         )}
       </SidebarFooter>
+      
+      {/* Upgrade Dialog */}
+      {storeId && storePlan && (
+        <UpgradeDialog
+          open={upgradeDialogOpen}
+          onOpenChange={setUpgradeDialogOpen}
+          currentPlan={storePlan as 'free' | 'paid' | 'pro'}
+          storeId={storeId}
+        />
+      )}
     </Sidebar>
   )
 }

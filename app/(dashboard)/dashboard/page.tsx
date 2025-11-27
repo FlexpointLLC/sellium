@@ -8,6 +8,8 @@ import { Package, ShoppingCart, CurrencyDollar, Users, CheckCircle, ArrowSquareO
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { UpgradeDialog } from "@/components/upgrade-dialog"
 
 interface Store {
   id: string
@@ -68,6 +70,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [customDomain, setCustomDomain] = useState<{ domain: string; status: string } | null>(null)
   const [currentTraffic, setCurrentTraffic] = useState(0)
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
+  const [userRole, setUserRole] = useState<string>('owner')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -78,10 +82,10 @@ export default function DashboardPage() {
         return
       }
 
-      // Check if user has completed onboarding
+      // Check if user has completed onboarding and get role
       const { data: profile } = await supabase
         .from("profiles")
-        .select("onboarding_completed")
+        .select("onboarding_completed, role")
         .eq("id", user.id)
         .single()
 
@@ -90,6 +94,9 @@ export default function DashboardPage() {
         router.push("/onboarding")
         return
       }
+
+      // Set user role
+      setUserRole(profile.role || 'owner')
 
       // Fetch store data
       const { data: storeData, error: storeError } = await supabase
@@ -290,8 +297,8 @@ export default function DashboardPage() {
       <Card className="overflow-hidden relative">
         <CardContent className="p-6">
           {showUpgradeButton && (
-            <Link
-              href="/dashboard/settings?tab=billing"
+            <Button
+              onClick={() => setUpgradeDialogOpen(true)}
               className={`absolute top-4 right-4 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 store.plan === 'free'
                   ? 'bg-orange-600 hover:bg-orange-700 text-white'
@@ -299,7 +306,7 @@ export default function DashboardPage() {
               }`}
             >
               Upgrade
-            </Link>
+            </Button>
           )}
           <div className="flex flex-col md:flex-row gap-6">
             {/* Store Preview Thumbnail */}
@@ -376,19 +383,21 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <CurrencyDollar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              +0% from last month
-            </p>
-          </CardContent>
-        </Card>
+      <div className={`grid gap-4 ${userRole === 'agent' ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-4'}`}>
+        {userRole !== 'agent' && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <CurrencyDollar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+              <p className="text-xs text-muted-foreground">
+                +0% from last month
+              </p>
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Orders</CardTitle>
@@ -550,6 +559,16 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Upgrade Dialog */}
+      {store && (
+        <UpgradeDialog
+          open={upgradeDialogOpen}
+          onOpenChange={setUpgradeDialogOpen}
+          currentPlan={store.plan as 'free' | 'paid' | 'pro'}
+          storeId={store.id}
+        />
+      )}
     </div>
   )
 }

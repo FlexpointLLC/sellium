@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/s
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { Separator } from "@/components/ui/separator"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { NoticesBanner } from "@/components/notices-banner"
 
 export default function DashboardLayout({
   children,
@@ -22,6 +23,7 @@ export default function DashboardLayout({
           <ThemeToggle />
         </header>
         <main className="flex-1 p-6 bg-muted/20 dark:bg-muted/3 overflow-auto scrollbar-hide">
+          <NoticesBanner />
           {children}
         </main>
       </SidebarInset>

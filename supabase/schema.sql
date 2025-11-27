@@ -22,6 +22,36 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'bio') THEN
     ALTER TABLE public.profiles ADD COLUMN bio TEXT;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'role') THEN
+    ALTER TABLE public.profiles ADD COLUMN role TEXT DEFAULT 'owner' CHECK (role IN ('admin', 'owner', 'agent', 'rider'));
+  END IF;
+END $$;
+
+-- Add upgrade_requests table if it doesn't exist
+CREATE TABLE IF NOT EXISTS public.upgrade_requests (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  store_id UUID REFERENCES public.stores(id) ON DELETE CASCADE NOT NULL,
+  current_plan TEXT NOT NULL CHECK (current_plan IN ('free', 'paid', 'pro')),
+  requested_plan TEXT NOT NULL CHECK (requested_plan IN ('paid', 'pro')),
+  transaction_id TEXT NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  reviewed_at TIMESTAMP WITH TIME ZONE,
+  reviewed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Add current_plan column to existing upgrade_requests table if it doesn't exist
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'upgrade_requests' AND column_name = 'current_plan') THEN
+    ALTER TABLE public.upgrade_requests ADD COLUMN current_plan TEXT CHECK (current_plan IN ('free', 'paid', 'pro'));
+    -- Update existing records to have a default current_plan (assuming 'free' for existing records)
+    UPDATE public.upgrade_requests SET current_plan = 'free' WHERE current_plan IS NULL;
+    -- Make it NOT NULL after updating existing records
+    ALTER TABLE public.upgrade_requests ALTER COLUMN current_plan SET NOT NULL;
+  END IF;
 END $$;
 
 -- Add missing columns to stores
@@ -262,6 +292,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   phone TEXT,
   avatar_url TEXT,
   bio TEXT,
+  role TEXT DEFAULT 'owner' CHECK (role IN ('admin', 'owner', 'agent', 'rider')),
   onboarding_completed BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -665,6 +696,38 @@ CREATE TABLE IF NOT EXISTS public.store_settings (
 );
 
 -- ============================================
+-- UPGRADE_REQUESTS TABLE
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.upgrade_requests (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  store_id UUID REFERENCES public.stores(id) ON DELETE CASCADE NOT NULL,
+  current_plan TEXT NOT NULL CHECK (current_plan IN ('free', 'paid', 'pro')),
+  requested_plan TEXT NOT NULL CHECK (requested_plan IN ('paid', 'pro')),
+  transaction_id TEXT NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  reviewed_at TIMESTAMP WITH TIME ZONE,
+  reviewed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ============================================
+-- NOTICES TABLE
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.notices (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  color TEXT DEFAULT 'grey' CHECK (color IN ('red', 'green', 'blue', 'yellow', 'grey')),
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+  store_id UUID REFERENCES public.stores(id) ON DELETE CASCADE,
+  closeable BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ============================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================
 
@@ -687,6 +750,8 @@ ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.custom_domains ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.store_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.upgrade_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notices ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies first (to avoid conflicts)
 DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
@@ -717,6 +782,14 @@ DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notific
 DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Store owners can manage store settings" ON public.store_settings;
 DROP POLICY IF EXISTS "Store owners can manage custom domains" ON public.custom_domains;
+DROP POLICY IF EXISTS "Store owners can manage upgrade requests" ON public.upgrade_requests;
+DROP POLICY IF EXISTS "Admin can view all profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Admin can update all profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Admin can view all stores" ON public.stores;
+DROP POLICY IF EXISTS "Admin can update all stores" ON public.stores;
+DROP POLICY IF EXISTS "Admin can manage all upgrade requests" ON public.upgrade_requests;
+DROP POLICY IF EXISTS "Admin can manage all notices" ON public.notices;
+DROP POLICY IF EXISTS "Public can view active notices" ON public.notices;
 
 -- Profiles policies
 CREATE POLICY "Users can view their own profile" ON public.profiles
@@ -727,6 +800,25 @@ CREATE POLICY "Users can update their own profile" ON public.profiles
 
 CREATE POLICY "Users can insert their own profile" ON public.profiles
   FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- Admin can view and manage all profiles
+CREATE POLICY "Admin can view all profiles" ON public.profiles
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admin can update all profiles" ON public.profiles
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
 
 -- Stores policies
 CREATE POLICY "Users can view their own stores" ON public.stores
@@ -743,6 +835,25 @@ CREATE POLICY "Users can delete their own stores" ON public.stores
 
 CREATE POLICY "Public can view active stores" ON public.stores
   FOR SELECT USING (status = 'active');
+
+-- Admin can view and update all stores
+CREATE POLICY "Admin can view all stores" ON public.stores
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admin can update all stores" ON public.stores
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
 
 -- Categories policies
 CREATE POLICY "Store owners can manage categories" ON public.categories
@@ -949,6 +1060,39 @@ CREATE POLICY "Store owners can manage custom domains" ON public.custom_domains
     )
   );
 
+-- Upgrade requests policies
+CREATE POLICY "Store owners can manage upgrade requests" ON public.upgrade_requests
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.stores
+      WHERE stores.id = upgrade_requests.store_id
+      AND stores.user_id = auth.uid()
+    )
+  );
+
+-- Admin can view and manage all upgrade requests
+CREATE POLICY "Admin can manage all upgrade requests" ON public.upgrade_requests
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+-- Notices policies
+CREATE POLICY "Admin can manage all notices" ON public.notices
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Public can view active notices" ON public.notices
+  FOR SELECT USING (status = 'active');
+
 -- ============================================
 -- FUNCTIONS
 -- ============================================
@@ -957,12 +1101,13 @@ CREATE POLICY "Store owners can manage custom domains" ON public.custom_domains
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, name, email, avatar_url, onboarding_completed)
+  INSERT INTO public.profiles (id, name, email, avatar_url, role, onboarding_completed)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name'),
     NEW.email,
     NEW.raw_user_meta_data->>'avatar_url',
+    COALESCE(NEW.raw_user_meta_data->>'role', 'owner'),
     FALSE
   );
   RETURN NEW;
