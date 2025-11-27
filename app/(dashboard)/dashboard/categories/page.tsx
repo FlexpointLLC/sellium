@@ -754,7 +754,7 @@ export default function CategoriesPage() {
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, category)}
         >
-          <td className="px-4 py-2.5">
+          <td className="px-4 py-2.5 text-sm">
             <div className="flex items-center gap-1.5" style={{ paddingLeft: `${depth * 20}px` }}>
               <DotsSixVertical className="h-4 w-4 text-muted-foreground/50 flex-shrink-0 cursor-grab active:cursor-grabbing" />
               
@@ -775,24 +775,24 @@ export default function CategoriesPage() {
               
               {hasChildren ? (
                 isExpanded ? (
-                  <FolderOpen className="h-5 w-5 text-amber-500 flex-shrink-0" weight="fill" />
+                  <FolderOpen className="h-4 w-4 text-amber-500 flex-shrink-0" weight="fill" />
                 ) : (
-                  <FolderSimple className="h-5 w-5 text-amber-500 flex-shrink-0" weight="fill" />
+                  <FolderSimple className="h-4 w-4 text-amber-500 flex-shrink-0" weight="fill" />
                 )
               ) : category.image_url ? (
                 <img 
                   src={category.image_url} 
                   alt={category.name}
-                  className="h-7 w-7 rounded object-cover flex-shrink-0"
+                  className="h-6 w-6 rounded object-cover flex-shrink-0"
                 />
               ) : (
-                <div className="flex h-7 w-7 items-center justify-center rounded bg-muted flex-shrink-0">
-                  <Folders className="h-3.5 w-3.5 text-muted-foreground" />
+                <div className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
+                  <Folders className="h-3 w-3 text-muted-foreground" />
                 </div>
               )}
               
               <div className="flex flex-col min-w-0">
-                <span className="font-medium text-sm truncate">{category.name}</span>
+                <span className="font-medium truncate">{category.name}</span>
                 {childCount > 0 && (
                   <span className="text-xs text-muted-foreground">
                     {childCount} subcategories
@@ -908,7 +908,7 @@ export default function CategoriesPage() {
           </div>
         )}
         
-        <div className="overflow-x-auto scrollbar-hide">
+        <div className="overflow-x-scroll scrollbar-visible pb-1">
           <table className="w-full min-w-[650px]">
             <thead>
               <tr className="border-b border-border/50 bg-muted/30">

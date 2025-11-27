@@ -318,7 +318,7 @@ export default function VariantsPage() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-border/50 bg-card overflow-x-auto scrollbar-hide">
+      <div className="rounded-lg border border-border/50 bg-card overflow-x-scroll scrollbar-visible pb-1">
         <table className="w-full min-w-[500px]">
           <thead>
             <tr className="border-b border-border/50">
@@ -351,10 +351,10 @@ export default function VariantsPage() {
               </tr>
             ) : (
               filteredVariants.map((variant) => (
-                <tr key={variant.id} className="border-b border-border/50 last:border-0">
+                <tr key={variant.id} className="border-b border-border/50 last:border-0 text-sm">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
                         <Stack className="h-4 w-4" />
                       </div>
                       <div>
@@ -377,12 +377,12 @@ export default function VariantsPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(variant)}>
+                      <Button variant="ghost" size="icon-sm" onClick={() => openEditDialog(variant)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon-sm"
                         className="text-destructive hover:text-destructive"
                         onClick={() => openDeleteDialog(variant)}
                       >

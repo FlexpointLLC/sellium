@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Users, MagnifyingGlass, Eye, Plus, Pencil, Trash, User } from "phosphor-react"
+import { Users, MagnifyingGlass, Eye, Plus, Pencil, Trash, User, Export } from "phosphor-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -307,6 +307,40 @@ export default function CustomersPage() {
     return customer.email.split("@")[0]
   }
 
+  function exportToCSV() {
+    if (filteredCustomers.length === 0) {
+      toast.error("No customers to export")
+      return
+    }
+
+    const headers = ["Name", "Email", "Phone", "Orders", "Total Spent", "Status", "Created At"]
+    const csvData = filteredCustomers.map(customer => [
+      getDisplayName(customer),
+      customer.email,
+      customer.phone || "",
+      customer.total_orders.toString(),
+      `$${customer.total_spent.toFixed(2)}`,
+      customer.status,
+      formatDate(customer.created_at)
+    ])
+
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map(row => row.map(cell => `"${cell}"`).join(","))
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", `customers-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    toast.success(`Exported ${filteredCustomers.length} customers`)
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl flex flex-col gap-6">
@@ -376,9 +410,13 @@ export default function CustomersPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+        <Button variant="outline" size="sm" onClick={exportToCSV}>
+          <Export className="h-4 w-4 mr-2" />
+          Export
+        </Button>
       </div>
 
-      <div className="rounded-xl border border-border/50 bg-card overflow-x-auto scrollbar-hide">
+      <div className="rounded-xl border border-border/50 bg-card overflow-x-scroll scrollbar-visible pb-1">
         <table className="w-full min-w-[750px]">
           <thead>
             <tr className="border-b border-border/50">
@@ -411,10 +449,10 @@ export default function CustomersPage() {
               </tr>
             ) : (
               filteredCustomers.map((customer) => (
-                <tr key={customer.id} className="border-b border-border/50 last:border-0">
+                <tr key={customer.id} className="border-b border-border/50 last:border-0 text-sm">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
                         <User className="h-4 w-4" />
                       </div>
                       <span className="font-medium">{getDisplayName(customer)}</span>
@@ -429,7 +467,7 @@ export default function CustomersPage() {
                       onValueChange={(value) => updateCustomerStatus(customer.id, value)}
                     >
                       <SelectTrigger 
-                        className={`w-[110px] h-8 text-xs font-medium capitalize border ${statusColors[customer.status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
+                        className={`w-[100px] h-7 text-xs font-medium capitalize border ${statusColors[customer.status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
                       >
                         <SelectValue />
                       </SelectTrigger>

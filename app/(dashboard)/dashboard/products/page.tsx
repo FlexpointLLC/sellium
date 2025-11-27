@@ -1436,7 +1436,7 @@ export default function ProductsPage() {
           </div>
         ) : (
           <div className="rounded-lg border overflow-hidden">
-            <div className="overflow-x-auto scrollbar-hide">
+            <div className="overflow-x-scroll scrollbar-visible pb-1">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border/50 bg-muted/50">
@@ -1867,7 +1867,7 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border/50 bg-card overflow-x-auto scrollbar-hide">
+      <div className="rounded-lg border border-border/50 bg-card overflow-x-scroll scrollbar-visible pb-1">
         <table className="w-full min-w-[700px]">
           <thead>
             <tr className="border-b border-border/50">
@@ -1904,14 +1904,14 @@ export default function ProductsPage() {
               </tr>
             ) : (
               filteredProducts.map((product) => (
-                <tr key={product.id} className="border-b border-border/50 last:border-0">
+                <tr key={product.id} className="border-b border-border/50 last:border-0 text-sm">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted overflow-hidden shrink-0">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted overflow-hidden shrink-0">
                         {product.image_url ? (
                           <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                         ) : (
-                          <Package className="h-5 w-5" />
+                          <Package className="h-4 w-4" />
                         )}
                       </div>
                       <div>

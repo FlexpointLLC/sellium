@@ -196,7 +196,8 @@ export default function OrdersPage() {
   const filteredOrders = orders.filter(order =>
     order.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (order.customer_name && order.customer_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    order.customer_email.toLowerCase().includes(searchQuery.toLowerCase())
+    order.customer_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (order.transaction_id && order.transaction_id.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
   function formatDate(dateString: string) {
@@ -404,7 +405,7 @@ export default function OrdersPage() {
         <div className="relative flex-1 max-w-sm">
           <MagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input 
-            placeholder="Search orders..." 
+            placeholder="Search by order, customer, or transaction ID..." 
             className="pl-9" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -412,8 +413,8 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border/50 bg-card overflow-x-auto scrollbar-hide">
-        <table className="w-full min-w-[800px]">
+      <div className="rounded-xl border border-border/50 bg-card overflow-x-scroll scrollbar-visible pb-1">
+        <table className="w-full min-w-[950px]">
           <thead>
             <tr className="border-b border-border/50">
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Order</th>
@@ -423,6 +424,7 @@ export default function OrdersPage() {
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Status</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Payment</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Method</th>
+              <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Trx ID</th>
               <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Date</th>
               <th className="px-6 py-3 w-12"></th>
             </tr>
@@ -430,7 +432,7 @@ export default function OrdersPage() {
           <tbody>
             {filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan={9}>
+                <td colSpan={10}>
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <ShoppingCart className="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <p className="text-muted-foreground">
@@ -442,29 +444,29 @@ export default function OrdersPage() {
             ) : (
               filteredOrders.map((order) => (
                 <tr key={order.id} className="border-b border-border/50 last:border-0">
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 text-sm">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
                         <ShoppingCart className="h-4 w-4" />
                       </div>
                       <span className="font-medium">{order.order_number}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 text-sm">
                     <div className="flex flex-col">
                       <span className="font-medium">{order.customer_name || "Guest"}</span>
                       <span className="text-xs text-muted-foreground">{order.customer_email}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4">{order.item_count}</td>
-                  <td className="px-6 py-4 font-medium">${order.total.toFixed(2)}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 text-sm">{order.item_count}</td>
+                  <td className="px-6 py-4 text-sm font-medium">${order.total.toFixed(2)}</td>
+                  <td className="px-6 py-4 text-sm">
                     <Select
                       value={order.status}
                       onValueChange={(value) => updateOrderStatus(order.id, value)}
                     >
                       <SelectTrigger 
-                        className={`w-[130px] h-8 text-xs font-medium capitalize border ${statusColors[order.status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
+                        className={`w-[110px] h-7 text-xs font-medium capitalize border ${statusColors[order.status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
                       >
                         <SelectValue />
                       </SelectTrigger>
@@ -481,13 +483,13 @@ export default function OrdersPage() {
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 text-sm">
                     <Select
                       value={order.payment_status}
                       onValueChange={(value) => updatePaymentStatus(order.id, value)}
                     >
                       <SelectTrigger 
-                        className={`w-[140px] h-8 text-xs font-medium capitalize border ${paymentStatusColors[order.payment_status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
+                        className={`w-[110px] h-7 text-xs font-medium capitalize border ${paymentStatusColors[order.payment_status] || "bg-gray-500/10 text-gray-500 border-gray-500/30"}`}
                       >
                         <SelectValue />
                       </SelectTrigger>
@@ -504,8 +506,8 @@ export default function OrdersPage() {
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm capitalize">
+                  <td className="px-6 py-4 text-sm">
+                    <span className="capitalize">
                       {order.payment_method === "cod" ? "COD" :
                        order.payment_method === "bkash" ? "bKash" :
                        order.payment_method === "bkash_manual" ? "bKash" :
@@ -515,7 +517,12 @@ export default function OrdersPage() {
                        order.payment_method || "-"}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground">{formatDate(order.created_at)}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <span className="font-mono text-muted-foreground">
+                      {order.transaction_id || "-"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-muted-foreground whitespace-nowrap">{formatDate(order.created_at)}</td>
                   <td className="px-6 py-4">
                     <Button 
                       variant="ghost" 
