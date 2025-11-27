@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise, Copy, Check, Lock } from "phosphor-react"
+import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise, Copy, Check, Lock, Users, Envelope, UserPlus } from "phosphor-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,7 +25,7 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 
-type TabType = "store" | "profile" | "domain" | "notifications" | "payments" | "security"
+type TabType = "store" | "profile" | "team" | "domain" | "notifications" | "payments" | "security"
 
 // Wrapper component to handle Suspense for useSearchParams
 export default function SettingsPage() {
@@ -66,7 +66,7 @@ function SettingsPageContent() {
   
   // Get initial tab from URL or default to "store"
   const tabFromUrl = searchParams.get("tab") as TabType | null
-  const validTabs: TabType[] = ["store", "profile", "domain", "notifications", "payments", "security"]
+  const validTabs: TabType[] = ["store", "profile", "team", "domain", "notifications", "payments", "security"]
   const initialTab = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : "store"
   
   const [activeTab, setActiveTab] = useState<TabType>(initialTab)
@@ -151,6 +151,13 @@ function SettingsPageContent() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Team settings
+  const [teamMembers, setTeamMembers] = useState<any[]>([])
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteRole, setInviteRole] = useState<"owner" | "agent" | "rider">("agent")
+  const [inviting, setInviting] = useState(false)
+  const [loadingTeam, setLoadingTeam] = useState(false)
 
   // Payment settings
   const [paymentSettings, setPaymentSettings] = useState({
@@ -263,6 +270,12 @@ function SettingsPageContent() {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (activeTab === "team" && storeId) {
+      fetchTeamMembers()
+    }
+  }, [activeTab, storeId])
 
   async function fetchData() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -448,6 +461,192 @@ function SettingsPageContent() {
       toast.success("Profile saved successfully")
     }
     setSaving(false)
+  }
+
+  // Fetch team members
+  async function fetchTeamMembers() {
+    if (!storeId) return
+    
+    setLoadingTeam(true)
+    const { data, error } = await supabase
+      .from("store_members")
+      .select(`
+        id,
+        role,
+        invited_at,
+        user_id
+      `)
+      .eq("store_id", storeId)
+      .order("invited_at", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching team members:", error)
+      toast.error("Failed to load team members")
+      setLoadingTeam(false)
+      return
+    }
+
+    // Fetch user profiles for each member
+    const membersWithProfiles = await Promise.all(
+      (data || []).map(async (member: any) => {
+        const { data: userProfile } = await supabase
+          .from("profiles")
+          .select("id, name, email, avatar_url")
+          .eq("id", member.user_id)
+          .single()
+
+        return {
+          ...member,
+          user: userProfile || null
+        }
+      })
+    )
+
+    // Also include the store owner (always show owner first)
+    const { data: storeData } = await supabase
+      .from("stores")
+      .select("user_id")
+      .eq("id", storeId)
+      .single()
+
+    if (storeData) {
+      const { data: ownerProfile } = await supabase
+        .from("profiles")
+        .select("id, name, email, avatar_url")
+        .eq("id", storeData.user_id)
+        .single()
+
+      // Always include the owner at the top of the list
+      const allMembers = [
+        {
+          id: "owner",
+          role: "owner",
+          user_id: storeData.user_id,
+          invited_at: null,
+          user: ownerProfile || { id: storeData.user_id, name: null, email: null, avatar_url: null }
+        },
+        ...membersWithProfiles
+      ]
+
+      setTeamMembers(allMembers)
+    } else {
+      // If store data not found, still try to show members
+      setTeamMembers(membersWithProfiles)
+    }
+
+    setLoadingTeam(false)
+  }
+
+  // Invite team member
+  async function handleInviteMember() {
+    if (!inviteEmail.trim() || !storeId) {
+      toast.error("Please enter an email address")
+      return
+    }
+
+    setInviting(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      setInviting(false)
+      return
+    }
+
+    // Check if user exists
+    const { data: existingUser } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("email", inviteEmail.trim())
+      .single()
+
+    if (!existingUser) {
+      toast.error("User with this email does not exist. They need to sign up first.")
+      setInviting(false)
+      return
+    }
+
+    // Check if already a member
+    const { data: existingMember } = await supabase
+      .from("store_members")
+      .select("id")
+      .eq("store_id", storeId)
+      .eq("user_id", existingUser.id)
+      .single()
+
+    if (existingMember) {
+      toast.error("User is already a team member")
+      setInviting(false)
+      return
+    }
+
+    // Add as team member
+    const { error } = await supabase
+      .from("store_members")
+      .insert({
+        store_id: storeId,
+        user_id: existingUser.id,
+        role: inviteRole,
+        invited_by: user.id
+      })
+
+    if (error) {
+      console.error("Error inviting member:", error)
+      toast.error("Failed to invite team member")
+      setInviting(false)
+      return
+    }
+
+    toast.success("Team member invited successfully")
+    setInviteEmail("")
+    setInviteRole("agent")
+    fetchTeamMembers()
+    setInviting(false)
+  }
+
+  // Update team member role
+  async function handleUpdateMemberRole(memberId: string, newRole: "owner" | "agent" | "rider") {
+    if (!storeId) return
+
+    // If it's the owner, we can't change their role
+    if (memberId === "owner") {
+      toast.error("Cannot change owner role")
+      return
+    }
+
+    const { error } = await supabase
+      .from("store_members")
+      .update({ role: newRole })
+      .eq("id", memberId)
+      .eq("store_id", storeId)
+
+    if (error) {
+      console.error("Error updating member role:", error)
+      toast.error("Failed to update member role")
+      return
+    }
+
+    toast.success("Member role updated successfully")
+    fetchTeamMembers()
+  }
+
+  // Remove team member
+  async function handleRemoveMember(memberId: string) {
+    if (!storeId) return
+
+    const { error } = await supabase
+      .from("store_members")
+      .delete()
+      .eq("id", memberId)
+      .eq("store_id", storeId)
+
+    if (error) {
+      console.error("Error removing member:", error)
+      toast.error("Failed to remove team member")
+      return
+    }
+
+    toast.success("Team member removed successfully")
+    fetchTeamMembers()
   }
 
   // Upload avatar image
@@ -1127,6 +1326,7 @@ function SettingsPageContent() {
     { id: "payments" as TabType, label: "Payments", icon: CreditCard },
     { id: "domain" as TabType, label: "Custom Domain", icon: LinkIcon },
     { id: "profile" as TabType, label: "Profile", icon: User },
+    { id: "team" as TabType, label: "Team", icon: Users },
     { id: "security" as TabType, label: "Security", icon: Shield },
     { id: "notifications" as TabType, label: "Notifications", icon: Bell },
   ]
@@ -1720,6 +1920,124 @@ function SettingsPageContent() {
                   <Button size="sm" onClick={handleSaveProfile} disabled={saving}>
                     {saving ? "Saving..." : "Save Changes"}
                   </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Team Tab */}
+          {activeTab === "team" && (
+            <div className="rounded-lg border border-border/50 bg-card p-6">
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold">Team Management</h2>
+                <p className="text-sm text-muted-foreground">Manage team members for your store</p>
+              </div>
+
+              <div className="space-y-6">
+                {/* Invite Team Member */}
+                <div className="rounded-lg border border-border/50 bg-muted/30 p-4">
+                  <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
+                    <UserPlus className="h-4 w-4" />
+                    Invite Team Member
+                  </h3>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label>Email Address</Label>
+                      <Input
+                        type="email"
+                        placeholder="user@example.com"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Role</Label>
+                      <Select value={inviteRole} onValueChange={(value: "owner" | "agent" | "rider") => setInviteRole(value)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="owner">Owner</SelectItem>
+                          <SelectItem value="agent">Agent</SelectItem>
+                          <SelectItem value="rider">Rider</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        onClick={handleInviteMember}
+                        disabled={!inviteEmail.trim() || inviting}
+                        className="w-full"
+                      >
+                        {inviting ? "Inviting..." : "Send Invite"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Team Members List */}
+                <div>
+                  <h3 className="text-sm font-medium mb-4">Team Members</h3>
+                  {loadingTeam ? (
+                    <div className="text-center py-8 text-muted-foreground">Loading team members...</div>
+                  ) : teamMembers.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">No team members yet</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {teamMembers.map((member) => (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between p-4 border border-border/50 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+                              {member.user?.avatar_url ? (
+                                <img src={member.user.avatar_url} alt={member.user.name || ""} className="h-full w-full rounded-full object-cover" />
+                              ) : (
+                                <User className="h-5 w-5 text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{member.user?.name || "Unknown"}</p>
+                              <p className="text-xs text-muted-foreground truncate">{member.user?.email || "-"}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <Select
+                              value={member.role}
+                              onValueChange={(value: "owner" | "agent" | "rider") => handleUpdateMemberRole(member.id, value)}
+                              disabled={member.id === "owner"}
+                            >
+                              <SelectTrigger 
+                                className={`w-[100px] h-7 text-xs capitalize ${
+                                  member.role === "owner" ? "bg-purple-500/10 text-purple-500 border-purple-500/30" :
+                                  member.role === "agent" ? "bg-blue-500/10 text-blue-500 border-blue-500/30" :
+                                  "bg-gray-500/10 text-gray-500 border-gray-500/30"
+                                }`}
+                              >
+                                <SelectValue placeholder="Role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="owner">Owner</SelectItem>
+                                <SelectItem value="agent">Agent</SelectItem>
+                                <SelectItem value="rider">Rider</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {member.id !== "owner" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveMember(member.id)}
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

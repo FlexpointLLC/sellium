@@ -1,7 +1,8 @@
 "use client"
 /* eslint-disable @next/next/no-img-element */
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import Script from "next/script"
 import { 
@@ -9,7 +10,9 @@ import {
   Phone, 
   ShoppingCart,
   User,
-  CaretDown
+  CaretDown,
+  List,
+  X
 } from "phosphor-react"
 import { Input } from "@/components/ui/input"
 import { useCart } from "@/lib/cart-context"
@@ -89,9 +92,21 @@ function CategoryItem({
   themeColor: string
 }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
+  const categoryRef = useRef<HTMLDivElement>(null)
   const hasChildren = category.children && category.children.length > 0
   const isActive = category.slug === currentCategorySlug || 
     category.children?.some(child => child.slug === currentCategorySlug)
+
+  useEffect(() => {
+    if (isOpen && categoryRef.current) {
+      const rect = categoryRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX
+      })
+    }
+  }, [isOpen])
 
   if (!hasChildren) {
     return (
@@ -116,11 +131,13 @@ function CategoryItem({
   }
 
   return (
-    <div 
-      className="relative flex-shrink-0"
-      onMouseEnter={() => setIsOpen(true)}
-      onMouseLeave={() => setIsOpen(false)}
-    >
+    <>
+      <div 
+        ref={categoryRef}
+        className="relative flex-shrink-0"
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => setIsOpen(false)}
+      >
       <button
         className={`flex items-center gap-1 text-sm font-medium whitespace-nowrap transition-colors py-3 ${
           isActive
@@ -142,9 +159,20 @@ function CategoryItem({
         )}
       </button>
 
-      {/* Dropdown */}
-      {isOpen && (
-        <div className="absolute top-full left-0 pt-1 z-[100]">
+      </div>
+      
+      {/* Dropdown - Rendered via Portal to avoid overflow clipping */}
+      {isOpen && typeof window !== 'undefined' && createPortal(
+        <div 
+          className="fixed z-[1000]"
+          style={{ 
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            pointerEvents: 'auto'
+          }}
+          onMouseEnter={() => setIsOpen(true)}
+          onMouseLeave={() => setIsOpen(false)}
+        >
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 py-2 min-w-[180px]">
             {/* Parent category link */}
             <Link
@@ -170,9 +198,10 @@ function CategoryItem({
               </Link>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   )
 }
 
@@ -187,6 +216,7 @@ export function StorefrontHeader({
   const { itemCount } = useCart()
   const { getUrl } = useStorefrontUrl(username)
   const themeColor = store.theme_color || "#000000"
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Build tree structure - only show root categories in nav
   const categoryTree = buildCategoryTree(categories)
@@ -205,72 +235,83 @@ export function StorefrontHeader({
       {/* Top Header - Logo | Search | User */}
       <header className="sticky top-0 z-50 bg-white border-b border-black/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center h-16 gap-4">
-            {/* Logo - Left */}
-            <div className="flex-1 flex justify-start">
+          <div className="flex items-center h-16 gap-2 sm:gap-4">
+            {/* Logo - Most Left */}
+            <div className="shrink-0">
               <Link href={getUrl()} className="flex items-center gap-2 shrink-0">
                 {store.logo_url ? (
-                  <img src={store.logo_url} alt={store.name} className="h-10 w-auto" />
+                  <img src={store.logo_url} alt={store.name} className="h-8 sm:h-10 w-auto" />
                 ) : (
                   <div className="flex items-center gap-2">
                     <div 
-                      className="h-8 w-8 rounded flex items-center justify-center text-white font-bold"
+                      className="h-6 w-6 sm:h-8 sm:w-8 rounded flex items-center justify-center text-white font-bold text-sm sm:text-base"
                       style={{ backgroundColor: themeColor }}
                     >
                       {store.name.charAt(0)}
                     </div>
-                    <span className="font-bold text-xl tracking-tight">{store.name}</span>
+                    <span className="font-bold text-base sm:text-xl tracking-tight hidden sm:inline">{store.name}</span>
                   </div>
                 )}
               </Link>
             </div>
 
             {/* Search - Center */}
-            <div className="w-full max-w-md">
-              <div className="relative w-full">
-                <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <div className="flex-1 min-w-0 flex justify-center">
+              <div className="relative w-full max-w-md">
+                <MagnifyingGlass className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-400" />
                 <Input
                   type="text"
                   placeholder="Search products..."
-                  className="pl-9 h-9 bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 w-full"
+                  className="pl-7 sm:pl-9 h-8 sm:h-9 bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 w-full text-sm sm:text-base"
                   value={searchQuery}
                   onChange={(e) => onSearchChange?.(e.target.value)}
                 />
               </div>
             </div>
 
-            {/* Icons - Right */}
-            <div className="flex-1 flex justify-end">
-              <div className="flex items-center gap-1">
+            {/* Icons - Most Right */}
+            <div className="shrink-0 flex items-center gap-0.5 sm:gap-1">
+              {categoryTree.length > 0 && (
+                <button
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="md:hidden p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  aria-label="Menu"
+                >
+                  {mobileMenuOpen ? (
+                    <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                  ) : (
+                    <List className="h-4 w-4 sm:h-5 sm:w-5" />
+                  )}
+                </button>
+              )}
                 {store.social_links?.phone && (
                   <a 
                     href={`tel:${store.social_links.phone}`} 
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
                     title="Call us"
                   >
-                    <Phone className="h-5 w-5" />
+                    <Phone className="h-4 w-4 sm:h-5 sm:w-5" />
                   </a>
                 )}
                 <Link 
                   href={getUrl('/cart')}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors relative"
+                  className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors relative"
                   title="Cart"
                 >
-                  <ShoppingCart className="h-5 w-5" />
+                  <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
                   {itemCount > 0 && (
-                    <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs font-bold text-white bg-red-500 rounded-full">
+                    <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center text-[10px] sm:text-xs font-bold text-white bg-red-500 rounded-full">
                       {itemCount > 99 ? '99+' : itemCount}
                     </span>
                   )}
                 </Link>
                 <Link 
                   href={getUrl('/account')}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
                   title="Account"
                 >
-                  <User className="h-5 w-5" />
+                  <User className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Link>
-              </div>
             </div>
           </div>
         </div>
@@ -278,23 +319,67 @@ export function StorefrontHeader({
 
       {/* Categories Navigation */}
       {categoryTree.length > 0 && (
-        <nav className="sticky top-16 z-40 bg-white border-b border-black/10 overflow-visible">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 overflow-visible">
-            <div 
-              className="flex items-center gap-6 h-12"
-            >
-              {categoryTree.map((category) => (
-                <CategoryItem
-                  key={category.id}
-                  category={category}
-                  currentCategorySlug={currentCategorySlug}
-                  getUrl={getUrl}
-                  themeColor={themeColor}
-                />
-              ))}
+        <>
+          {/* Desktop Categories Navigation */}
+          <nav className="hidden md:block sticky top-16 z-40 bg-white border-b border-black/10 overflow-x-auto scrollbar-hide">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex items-center gap-6 h-12" style={{ position: 'relative', minWidth: 'max-content' }}>
+                {categoryTree.map((category) => (
+                  <CategoryItem
+                    key={category.id}
+                    category={category}
+                    currentCategorySlug={currentCategorySlug}
+                    getUrl={getUrl}
+                    themeColor={themeColor}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        </nav>
+          </nav>
+
+          {/* Mobile Categories Menu */}
+          {mobileMenuOpen && (
+            <nav className="md:hidden bg-white border-b border-black/10">
+              <div className="max-w-7xl mx-auto px-4 py-2 max-h-[60vh] overflow-y-auto">
+                {categoryTree.map((category) => {
+                  const hasChildren = category.children && category.children.length > 0
+                  const isActive = category.slug === currentCategorySlug || 
+                    category.children?.some(child => child.slug === currentCategorySlug)
+
+                  return (
+                    <div key={category.id} className="py-1">
+                      <Link
+                        href={getUrl(getCategoryPath(category))}
+                        className={`block py-2 text-sm font-medium ${
+                          isActive ? "text-gray-900" : "text-gray-600"
+                        }`}
+                        style={isActive ? { color: themeColor } : undefined}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {category.name.toUpperCase()}
+                      </Link>
+                      {hasChildren && category.children?.map((child) => (
+                        <Link
+                          key={child.id}
+                          href={getUrl(getCategoryPath(child, category.slug))}
+                          className={`block py-1.5 pl-4 text-sm ${
+                            child.slug === currentCategorySlug
+                              ? "font-medium text-gray-900"
+                              : "text-gray-600"
+                          }`}
+                          style={child.slug === currentCategorySlug ? { color: themeColor } : undefined}
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          {child.name}
+                        </Link>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            </nav>
+          )}
+        </>
       )}
     </>
   )

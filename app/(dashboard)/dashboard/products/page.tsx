@@ -5,8 +5,25 @@ import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { 
   Package, Plus, MagnifyingGlass, Pencil, Trash, X, 
-  CaretRight, CaretLeft, Check, Stack, Lightning, Image as ImageIcon, Upload
+  CaretRight, CaretLeft, Check, Stack, Lightning, Image as ImageIcon, Upload, DotsSixVertical
 } from "phosphor-react"
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -48,6 +65,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
 
 interface Product {
   id: string
@@ -64,6 +82,7 @@ interface Product {
   category_id: string | null
   has_variants: boolean
   variant_count?: number
+  sort_order?: number
 }
 
 interface Category {
@@ -104,6 +123,106 @@ interface Store {
 }
 
 // Cascading Category Dropdown Component
+// Sortable Product Row Component
+function SortableProductRow({ 
+  product, 
+  onEdit, 
+  onDelete 
+}: { 
+  product: Product
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: product.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className="border-b border-border/50 last:border-0 text-sm"
+    >
+      <td className="px-6 py-4">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+        >
+          <DotsSixVertical className="h-5 w-5" />
+        </button>
+      </td>
+      <td className="px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted overflow-hidden shrink-0">
+            {product.image_url ? (
+              <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+            ) : (
+              <Package className="h-4 w-4" />
+            )}
+          </div>
+          <div>
+            <span className="font-medium">{product.name}</span>
+            {product.variant_count && product.variant_count > 0 && (
+              <span className="ml-2 text-xs text-muted-foreground">
+                {product.variant_count} variants
+              </span>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="px-6 py-4 text-muted-foreground">
+        {product.sku || "-"}
+      </td>
+      <td className="px-6 py-4 font-medium">
+        ${product.price.toFixed(2)}
+      </td>
+      <td className="px-6 py-4">
+        {product.stock}
+      </td>
+      <td className="px-6 py-4">
+        <span
+          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+            product.status === "active"
+              ? "bg-green-500/10 text-green-500"
+              : product.status === "archived"
+              ? "bg-gray-500/10 text-gray-500"
+              : "bg-yellow-500/10 text-yellow-500"
+          }`}
+        >
+          {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
+        </span>
+      </td>
+      <td className="px-6 py-4">
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon-sm" onClick={onEdit}>
+            <Pencil />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon-sm"
+            className="text-destructive hover:text-destructive"
+            onClick={onDelete}
+          >
+            <Trash />
+          </Button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 function CategoryDropdown({ 
   categories, 
   value, 
@@ -207,6 +326,15 @@ export default function ProductsPage() {
   const [variantTemplates, setVariantTemplates] = useState<VariantTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [isReordering, setIsReordering] = useState(false)
+  
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
   
   // Dialog states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -275,15 +403,29 @@ export default function ProductsPage() {
     setStore(storeData)
 
     // Fetch products
-    const { data: productsData } = await supabase
+    const { data: productsData, error: productsError } = await supabase
       .from("products")
       .select("*")
       .eq("store_id", storeData.id)
       .order("created_at", { ascending: false })
 
-    if (productsData) {
+    if (productsError) {
+      console.error("Error fetching products:", productsError)
+    }
+
+    if (productsData && productsData.length > 0) {
+      // Sort by sort_order if available, otherwise keep created_at order
+      const sortedProducts = [...productsData].sort((a, b) => {
+        const aOrder = (a.sort_order !== undefined && a.sort_order !== null) ? a.sort_order : 999999
+        const bOrder = (b.sort_order !== undefined && b.sort_order !== null) ? b.sort_order : 999999
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder
+        }
+        return 0
+      })
+      
       // For products with variants, fetch the total stock from product_variants
-      const productsWithStock = await Promise.all(productsData.map(async (p) => {
+      const productsWithStock = await Promise.all(sortedProducts.map(async (p) => {
         if (p.has_variants) {
           // Get total stock from all variants
           const { data: variants } = await supabase
@@ -308,6 +450,9 @@ export default function ProductsPage() {
       }))
       
       setProducts(productsWithStock)
+    } else {
+      // If no products, set empty array
+      setProducts([])
     }
 
     // Fetch categories with parent_id for nested display
@@ -1304,6 +1449,57 @@ export default function ProductsPage() {
     (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    const oldIndex = filteredProducts.findIndex((p) => p.id === active.id)
+    const newIndex = filteredProducts.findIndex((p) => p.id === over.id)
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return
+    }
+
+    const reorderedProducts = arrayMove(filteredProducts, oldIndex, newIndex)
+    
+    // Update local state immediately for better UX
+    setProducts((prevProducts) => {
+      const productMap = new Map(prevProducts.map(p => [p.id, p]))
+      reorderedProducts.forEach((p, index) => {
+        const existingProduct = productMap.get(p.id)
+        if (existingProduct) {
+          productMap.set(p.id, { ...existingProduct, sort_order: index })
+        }
+      })
+      return Array.from(productMap.values()).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+    })
+
+    // Update sort_order in database
+    setIsReordering(true)
+    try {
+      // Batch update all products
+      for (let index = 0; index < reorderedProducts.length; index++) {
+        const product = reorderedProducts[index]
+        await supabase
+          .from("products")
+          .update({ sort_order: index })
+          .eq("id", product.id)
+      }
+
+      toast.success("Product order updated")
+    } catch (error) {
+      console.error("Error updating product order:", error)
+      toast.error("Failed to update product order")
+      // Revert on error
+      fetchData()
+    } finally {
+      setIsReordering(false)
+    }
+  }
+
   const maxSteps = formData.has_variants ? 3 : 1
   const editMaxSteps = formData.has_variants ? 3 : 1
 
@@ -1868,104 +2064,61 @@ export default function ProductsPage() {
       </div>
 
       <div className="rounded-lg border border-border/50 bg-card overflow-x-scroll scrollbar-visible pb-1">
-        <table className="w-full min-w-[700px]">
-          <thead>
-            <tr className="border-b border-border/50">
-              <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Product</th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">SKU</th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Price</th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Stock</th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Status</th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground w-20">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredProducts.length === 0 ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <Package className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                    <p className="text-muted-foreground">
-                      {searchQuery ? "No products found matching your search." : "No products yet."}
-                    </p>
-                    {!searchQuery && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="mt-4"
-                        onClick={() => { resetForm(); setIsAddDialogOpen(true); }}
-                      >
-                        <Plus />
-                        Add your first product
-                      </Button>
-                    )}
-                  </div>
-                </td>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <table className="w-full min-w-[700px]">
+            <thead>
+              <tr className="border-b border-border/50">
+                <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground w-10"></th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Product</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">SKU</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Price</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Stock</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Status</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground w-20">Actions</th>
               </tr>
-            ) : (
-              filteredProducts.map((product) => (
-                <tr key={product.id} className="border-b border-border/50 last:border-0 text-sm">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted overflow-hidden shrink-0">
-                        {product.image_url ? (
-                          <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <Package className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div>
-                        <span className="font-medium">{product.name}</span>
-                        {product.variant_count && product.variant_count > 0 && (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            {product.variant_count} variants
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-muted-foreground">
-                    {product.sku || "-"}
-                  </td>
-                  <td className="px-6 py-4 font-medium">
-                    ${product.price.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4">
-                    {product.stock}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                        product.status === "active"
-                          ? "bg-green-500/10 text-green-500"
-                          : product.status === "archived"
-                          ? "bg-gray-500/10 text-gray-500"
-                          : "bg-yellow-500/10 text-yellow-500"
-                      }`}
-                    >
-                      {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon-sm" onClick={() => openEditDialog(product)}>
-                        <Pencil />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon-sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => openDeleteDialog(product)}
-                      >
-                        <Trash />
-                      </Button>
+            </thead>
+            <tbody>
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <Package className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                      <p className="text-muted-foreground">
+                        {searchQuery ? "No products found matching your search." : "No products yet."}
+                      </p>
+                      {!searchQuery && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="mt-4"
+                          onClick={() => { resetForm(); setIsAddDialogOpen(true); }}
+                        >
+                          <Plus />
+                          Add your first product
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                <SortableContext items={filteredProducts.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                  {filteredProducts.map((product) => (
+                    <SortableProductRow 
+                      key={product.id} 
+                      product={product}
+                      onEdit={() => openEditDialog(product)}
+                      onDelete={() => openDeleteDialog(product)}
+                    />
+                  ))}
+                </SortableContext>
+              )}
+            </tbody>
+          </table>
+        </DndContext>
       </div>
 
       {/* Add Product Dialog */}

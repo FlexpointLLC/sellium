@@ -35,6 +35,7 @@ interface Product {
   category_id: string | null
   sku: string | null
   has_variants: boolean
+  sort_order?: number
 }
 
 interface ProductsBySubcategory {
@@ -223,6 +224,8 @@ function CategoryContent({
         .select("*")
         .eq("store_id", storeData.id)
         .in("category_id", allCategoryIds)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false })
 
       if (productsData) {
         setProducts(productsData)
@@ -259,6 +262,8 @@ function CategoryContent({
         .select("*")
         .eq("store_id", storeData.id)
         .eq("category_id", currentCategory.id)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false })
 
       if (productsData) {
         setProducts(productsData)
@@ -271,6 +276,16 @@ function CategoryContent({
 
   // Sort products
   const sortedProducts = [...products].sort((a, b) => {
+    // First, always respect sort_order if available
+    const aOrder = (a.sort_order !== undefined && a.sort_order !== null) ? a.sort_order : 999999
+    const bOrder = (b.sort_order !== undefined && b.sort_order !== null) ? b.sort_order : 999999
+    
+    // If sort_order is different, use it as primary sort
+    if (aOrder !== bOrder && sortBy === "newest") {
+      return aOrder - bOrder
+    }
+    
+    // Otherwise, apply the selected sort option
     switch (sortBy) {
       case "price-low":
         return a.price - b.price
@@ -282,7 +297,11 @@ function CategoryContent({
         return b.name.localeCompare(a.name)
       case "newest":
       default:
-        return 0 // Keep original order (newest first from DB)
+        // For newest, use sort_order first, then created_at
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder
+        }
+        return 0 // Keep original order from DB
     }
   })
 
@@ -408,12 +427,22 @@ function CategoryContent({
               const groupProducts = group.products
                 .filter(product => product.name.toLowerCase().includes(searchQuery.toLowerCase()))
                 .sort((a, b) => {
+                  // First, respect sort_order if available
+                  const aOrder = (a.sort_order !== undefined && a.sort_order !== null) ? a.sort_order : 999999
+                  const bOrder = (b.sort_order !== undefined && b.sort_order !== null) ? b.sort_order : 999999
+                  
                   switch (sortBy) {
                     case "price-low": return a.price - b.price
                     case "price-high": return b.price - a.price
                     case "name-az": return a.name.localeCompare(b.name)
                     case "name-za": return b.name.localeCompare(a.name)
-                    default: return 0
+                    case "newest":
+                    default:
+                      // For newest, use sort_order first
+                      if (aOrder !== bOrder) {
+                        return aOrder - bOrder
+                      }
+                      return 0
                   }
                 })
               

@@ -114,7 +114,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
   const [store, setStore] = useState<Store | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<Product[]>([])
-  const [productsByCategory, setProductsByCategory] = useState<Record<string, { name: string; slug: string; products: Product[] }>>({})
+  const [productsByCategory, setProductsByCategory] = useState<Record<string, { name: string; slug: string; products: Product[]; sort_order: number }>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -233,6 +233,7 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         `)
         .eq("store_id", storeData.id)
         .eq("status", "active")
+        .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false })
 
       if (productsData && productsData.length > 0) {
@@ -274,22 +275,30 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         }))
         setProducts(formattedProducts)
 
-        // Group products by category
-        const grouped: Record<string, { name: string; slug: string; products: Product[] }> = {}
+        // Group products by category and preserve sort_order
+        const grouped: Record<string, { name: string; slug: string; products: Product[]; sort_order: number }> = {}
         formattedProducts.forEach((product: Product) => {
           if (product.category) {
             const catSlug = product.category.slug
             if (!grouped[catSlug]) {
+              // Find the category from categoriesData to get its sort_order
+              const category = categoriesData?.find(c => c.slug === catSlug)
               grouped[catSlug] = {
                 name: product.category.name,
                 slug: product.category.slug,
-                products: []
+                products: [],
+                sort_order: category?.sort_order ?? 999999
               }
             }
             grouped[catSlug].products.push(product)
           }
         })
-        setProductsByCategory(grouped)
+        
+        // Sort categories by sort_order before setting state
+        const sortedGrouped = Object.fromEntries(
+          Object.entries(grouped).sort(([, a], [, b]) => a.sort_order - b.sort_order)
+        )
+        setProductsByCategory(sortedGrouped)
       }
 
       setLoading(false)

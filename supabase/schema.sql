@@ -165,6 +165,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'image_url') THEN
     ALTER TABLE public.products ADD COLUMN image_url TEXT;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'sort_order') THEN
+    ALTER TABLE public.products ADD COLUMN sort_order INTEGER DEFAULT 0;
+  END IF;
 END $$;
 
 -- Add missing columns to customers
@@ -329,6 +332,21 @@ CREATE TABLE IF NOT EXISTS public.stores (
 );
 
 -- ============================================
+-- STORE_MEMBERS TABLE (Team members for each store)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.store_members (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  store_id UUID REFERENCES public.stores(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  role TEXT DEFAULT 'agent' CHECK (role IN ('owner', 'agent', 'rider')),
+  invited_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  invited_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(store_id, user_id)
+);
+
+-- ============================================
 -- CATEGORIES TABLE
 -- ============================================
 CREATE TABLE IF NOT EXISTS public.categories (
@@ -393,6 +411,7 @@ CREATE TABLE IF NOT EXISTS public.products (
   seo_title TEXT,
   seo_description TEXT,
   tags TEXT[] DEFAULT '{}',
+  sort_order INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(store_id, slug)
@@ -1092,6 +1111,52 @@ CREATE POLICY "Admin can manage all notices" ON public.notices
 
 CREATE POLICY "Public can view active notices" ON public.notices
   FOR SELECT USING (status = 'active');
+
+-- Store members policies
+DROP POLICY IF EXISTS "Store owners can manage team members" ON public.store_members;
+DROP POLICY IF EXISTS "Team members can view their store" ON public.store_members;
+
+CREATE POLICY "Store owners can manage team members" ON public.store_members
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.stores
+      WHERE stores.id = store_members.store_id
+      AND stores.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Team members can view their store" ON public.store_members
+  FOR SELECT USING (
+    user_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM public.stores
+      WHERE stores.id = store_members.store_id
+      AND stores.user_id = auth.uid()
+    )
+  );
+
+-- Store members policies
+DROP POLICY IF EXISTS "Store owners can manage team members" ON public.store_members;
+DROP POLICY IF EXISTS "Team members can view their store" ON public.store_members;
+
+CREATE POLICY "Store owners can manage team members" ON public.store_members
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.stores
+      WHERE stores.id = store_members.store_id
+      AND stores.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Team members can view their store" ON public.store_members
+  FOR SELECT USING (
+    user_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM public.stores
+      WHERE stores.id = store_members.store_id
+      AND stores.user_id = auth.uid()
+    )
+  );
 
 -- ============================================
 -- FUNCTIONS
