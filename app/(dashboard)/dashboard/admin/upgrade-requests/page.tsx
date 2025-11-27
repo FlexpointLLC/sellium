@@ -163,12 +163,23 @@ export default function AdminUpgradeRequestsPage() {
         return
       }
 
-      // If approved, update store plan
+      // If approved, update store plan and limits
       if (newStatus === 'approved') {
+        // Define plan limits
+        const planLimits: Record<string, { traffic: number; products: number }> = {
+          free: { traffic: 2000, products: 100 },
+          paid: { traffic: 50000, products: 1000 },
+          pro: { traffic: 999999999, products: 10000 } // Very high number for "unlimited"
+        }
+
+        const limits = planLimits[requestedPlan] || planLimits.free
+
         const { error: storeError } = await supabase
           .from("stores")
           .update({
             plan: requestedPlan,
+            traffic_limit: limits.traffic,
+            product_limit: limits.products,
             updated_at: new Date().toISOString()
           })
           .eq("id", storeId)
