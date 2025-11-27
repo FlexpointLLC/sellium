@@ -400,7 +400,7 @@ export default function CustomersPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <MagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input 
@@ -410,7 +410,12 @@ export default function CustomersPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <Button variant="outline" size="sm" onClick={exportToCSV}>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={exportToCSV}
+          className="border-2 border-border/80 bg-muted/50 hover:bg-muted font-semibold shadow-sm"
+        >
           <Export className="h-4 w-4 mr-2" />
           Export
         </Button>

@@ -29,6 +29,10 @@ interface Store {
   theme_color: string | null
   currency: string
   linquo_org_id: string | null
+  available_time?: string | null
+  social_media_text?: string | null
+  copyright_text?: string | null
+  show_powered_by?: boolean
   social_links: {
     phone?: string
     whatsapp?: string
@@ -103,6 +107,10 @@ function AccountPageContent({ params }: { params: { username: string } }) {
         theme_color: storeData.theme_color || "#000000",
         currency: storeData.currency || "BDT",
         linquo_org_id: storeData.linquo_org_id || null,
+        available_time: storeData.available_time || null,
+        social_media_text: storeData.social_media_text || null,
+        copyright_text: storeData.copyright_text || null,
+        show_powered_by: storeData.show_powered_by !== undefined ? storeData.show_powered_by : true,
         social_links: storeData.social_links || null,
         address: storeData.address || null
       })
@@ -259,6 +267,10 @@ function AccountPageContent({ params }: { params: { username: string } }) {
           username: store.username,
           logo_url: store.logo_url,
           theme_color: store.theme_color,
+          available_time: store.available_time || null,
+          social_media_text: store.social_media_text || null,
+          copyright_text: store.copyright_text || null,
+          show_powered_by: store.show_powered_by !== undefined ? store.show_powered_by : true,
           social_links: store.social_links,
           address: store.address
         }}

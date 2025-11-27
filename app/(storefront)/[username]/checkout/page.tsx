@@ -38,6 +38,10 @@ interface Store {
   meta_description: string | null
   description: string | null
   linquo_org_id?: string | null
+  available_time?: string | null
+  social_media_text?: string | null
+  copyright_text?: string | null
+  show_powered_by?: boolean
   social_links?: {
     phone?: string
     whatsapp?: string
@@ -142,7 +146,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
   async function fetchStore() {
     const { data: storeData, error: storeError } = await supabase
       .from("stores")
-      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description, linquo_org_id, payment_settings")
+      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description, linquo_org_id, payment_settings, available_time, social_media_text, copyright_text, show_powered_by")
       .eq("username", params.username)
       .single()
 

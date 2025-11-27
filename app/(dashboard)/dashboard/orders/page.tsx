@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ShoppingCart, MagnifyingGlass, Eye, Package, MapPin, Phone, Envelope, User } from "phosphor-react"
+import { ShoppingCart, MagnifyingGlass, Eye, Package, MapPin, Phone, Envelope, User, Funnel, ArrowDown, ArrowUp, Download } from "phosphor-react"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -125,6 +125,10 @@ export default function OrdersPage() {
   const [store, setStore] = useState<Store | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all")
+  const [sortBy, setSortBy] = useState<"date" | "total" | "customer">("date")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   
   // View order dialog
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
@@ -193,12 +197,82 @@ export default function OrdersPage() {
     setLoading(false)
   }
 
-  const filteredOrders = orders.filter(order =>
-    order.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (order.customer_name && order.customer_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    order.customer_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (order.transaction_id && order.transaction_id.toLowerCase().includes(searchQuery.toLowerCase()))
-  )
+  // Filter orders
+  const filteredOrders = orders
+    .filter(order => {
+      // Search filter
+      const matchesSearch = 
+        order.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (order.customer_name && order.customer_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        order.customer_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (order.transaction_id && order.transaction_id.toLowerCase().includes(searchQuery.toLowerCase()))
+      
+      // Status filter
+      const matchesStatus = statusFilter === "all" || order.status === statusFilter
+      
+      // Payment status filter
+      const matchesPaymentStatus = paymentStatusFilter === "all" || order.payment_status === paymentStatusFilter
+      
+      return matchesSearch && matchesStatus && matchesPaymentStatus
+    })
+    .sort((a, b) => {
+      let comparison = 0
+      
+      switch (sortBy) {
+        case "date":
+          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          break
+        case "total":
+          comparison = a.total - b.total
+          break
+        case "customer":
+          const nameA = (a.customer_name || a.customer_email).toLowerCase()
+          const nameB = (b.customer_name || b.customer_email).toLowerCase()
+          comparison = nameA.localeCompare(nameB)
+          break
+      }
+      
+      return sortOrder === "asc" ? comparison : -comparison
+    })
+
+  // Export to CSV - exports only the filtered and sorted orders
+  function exportToCSV() {
+    if (filteredOrders.length === 0) {
+      toast.error("No orders to export")
+      return
+    }
+
+    // Export only the filtered orders (respects search, status filter, payment status filter, and sorting)
+    const headers = ["Order Number", "Customer Name", "Email", "Status", "Payment Status", "Payment Method", "Transaction ID", "Total", "Date"]
+    const rows = filteredOrders.map(order => [
+      order.order_number,
+      order.customer_name || "Guest",
+      order.customer_email,
+      order.status,
+      order.payment_status,
+      order.payment_method || "-",
+      order.transaction_id || "-",
+      order.total.toFixed(2),
+      formatDate(order.created_at)
+    ])
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", `orders_${new Date().toISOString().split("T")[0]}.csv`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    toast.success("Orders exported successfully")
+  }
 
   function formatDate(dateString: string) {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -401,7 +475,7 @@ export default function OrdersPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <MagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input 
@@ -410,6 +484,79 @@ export default function OrdersPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {/* Filters */}
+          <div className="flex items-center gap-2">
+            <Funnel className="h-4 w-4 text-muted-foreground" />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px] h-9 text-sm">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                {statusOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
+              <SelectTrigger className="w-[140px] h-9 text-sm">
+                <SelectValue placeholder="Payment" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Payment</SelectItem>
+                {paymentStatusOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Sort */}
+          <div className="flex items-center gap-2">
+            <Select value={sortBy} onValueChange={(value: "date" | "total" | "customer") => setSortBy(value)}>
+              <SelectTrigger className="w-[120px] h-9 text-sm">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date">Date</SelectItem>
+                <SelectItem value="total">Total</SelectItem>
+                <SelectItem value="customer">Customer</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 w-9 p-0"
+              onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+              title={sortOrder === "asc" ? "Sort Descending" : "Sort Ascending"}
+            >
+              {sortOrder === "asc" ? (
+                <ArrowUp className="h-4 w-4" />
+              ) : (
+                <ArrowDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+
+          {/* Export */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportToCSV}
+            className="h-9 border-2 border-border/80 bg-muted/50 hover:bg-muted font-semibold shadow-sm"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
         </div>
       </div>
 

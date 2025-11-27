@@ -20,6 +20,10 @@ interface Store {
   username: string
   logo_url: string | null
   theme_color: string | null
+  available_time?: string | null
+  social_media_text?: string | null
+  copyright_text?: string | null
+  show_powered_by?: boolean
   social_links?: {
     phone?: string
     whatsapp?: string
@@ -177,10 +181,12 @@ export function StorefrontFooter({ store, categories = [], username }: Storefron
                   </span>
                 </li>
               )}
-              <li className="flex items-center gap-2">
-                <Clock className="h-4 w-4 flex-shrink-0" />
-                <span>SAT - FRI, 10AM - 11PM</span>
-              </li>
+              {store.available_time && (
+                <li className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 flex-shrink-0" />
+                  <span>{store.available_time}</span>
+                </li>
+              )}
               {store.social_links?.email && (
                 <li className="flex items-center gap-2">
                   <Envelope className="h-4 w-4 flex-shrink-0" />
@@ -195,9 +201,11 @@ export function StorefrontFooter({ store, categories = [], username }: Storefron
           {/* Follow Us */}
           <div>
             <h3 className="font-bold text-sm tracking-wide mb-4">FOLLOW US</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Follow us on social media for updates and offers.
-            </p>
+            {store.social_media_text && (
+              <p className="text-sm text-gray-600 mb-4">
+                {store.social_media_text}
+              </p>
+            )}
           </div>
         </div>
 
@@ -214,10 +222,18 @@ export function StorefrontFooter({ store, categories = [], username }: Storefron
 
         {/* Copyright */}
         <div className="text-center text-sm text-gray-500">
-          <p>© {new Date().getFullYear()} {store.name}. All rights reserved.</p>
-          <p className="mt-1">
-            Powered by <Link href="https://sellium.store" className="font-medium text-gray-700 hover:underline">Sellium</Link>
-          </p>
+          {store.copyright_text ? (
+            <p>{store.copyright_text.replace(/{store_name}/g, store.name).replace(/{year}/g, new Date().getFullYear().toString())}</p>
+          ) : (
+            <>
+              <p>© {new Date().getFullYear()} {store.name}. All rights reserved.</p>
+              {store.show_powered_by !== false && (
+                <p className="mt-1">
+                  Powered by <Link href="https://sellium.store" className="font-medium text-gray-700 hover:underline">Sellium</Link>
+                </p>
+              )}
+            </>
+          )}
         </div>
       </div>
     </footer>

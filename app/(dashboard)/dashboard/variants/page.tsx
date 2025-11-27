@@ -298,7 +298,7 @@ export default function VariantsPage() {
         </Button>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <MagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input

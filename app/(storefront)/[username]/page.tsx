@@ -36,6 +36,10 @@ interface Store {
   theme_color: string | null
   currency: string  // Currency code (BDT, USD, EUR, etc.)
   linquo_org_id: string | null  // Linquo live chat organization ID
+  available_time?: string | null
+  social_media_text?: string | null
+  copyright_text?: string | null
+  show_powered_by?: boolean
   social_links: {
     phone?: string
     whatsapp?: string
@@ -180,6 +184,10 @@ function StorefrontContent({ params }: { params: { username: string } }) {
         theme_color: storeData.theme_color || "#000000",
         currency: storeData.currency || "BDT",
         linquo_org_id: storeData.linquo_org_id || null,
+        available_time: storeData.available_time || null,
+        social_media_text: storeData.social_media_text || null,
+        copyright_text: storeData.copyright_text || null,
+        show_powered_by: storeData.show_powered_by !== undefined ? storeData.show_powered_by : true,
         social_links: storeData.social_links || null,
         address: storeData.address || null
       })

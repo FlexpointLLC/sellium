@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise, Copy, Check, Lock, Users, Envelope, UserPlus, FileText } from "phosphor-react"
+import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise, Copy, Check, Lock, Users, Envelope, UserPlus, FileText, Crown } from "phosphor-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -117,6 +117,10 @@ function SettingsPageContent() {
     currency: "BDT",
     timezone: "Asia/Dhaka",
     plan: "free" as string,
+    available_time: "",
+    social_media_text: "",
+    copyright_text: "",
+    show_powered_by: true,
     address: {
       street: "",
       city: "",
@@ -528,6 +532,10 @@ function SettingsPageContent() {
         currency: storeData.currency || "BDT",
         timezone: storeData.timezone || "Asia/Dhaka",
         plan: storeData.plan || "free",
+        available_time: storeData.available_time || "",
+        social_media_text: storeData.social_media_text || "",
+        copyright_text: storeData.copyright_text || "",
+        show_powered_by: storeData.show_powered_by !== undefined ? storeData.show_powered_by : true,
         address: storeData.address || {
           street: "",
           city: "",
@@ -692,15 +700,37 @@ function SettingsPageContent() {
     // Fetch user profiles for each member
     const membersWithProfiles = await Promise.all(
       (data || []).map(async (member: any) => {
-        const { data: userProfile } = await supabase
+        const { data: userProfile, error: profileError } = await supabase
           .from("profiles")
           .select("id, name, email, avatar_url")
           .eq("id", member.user_id)
           .single()
 
+        // If profile doesn't exist or email is missing, try to get email from auth
+        if (!userProfile || !userProfile.email) {
+          // Try to get email from the current user's session if it's them
+          const { data: { user: currentUser } } = await supabase.auth.getUser()
+          if (currentUser && currentUser.id === member.user_id) {
+            return {
+              ...member,
+              user: {
+                id: member.user_id,
+                name: userProfile?.name || null,
+                email: currentUser.email || null,
+                avatar_url: userProfile?.avatar_url || null
+              }
+            }
+          }
+        }
+
         return {
           ...member,
-          user: userProfile || null
+          user: userProfile || {
+            id: member.user_id,
+            name: null,
+            email: null,
+            avatar_url: null
+          }
         }
       })
     )
@@ -719,6 +749,15 @@ function SettingsPageContent() {
         .eq("id", storeData.user_id)
         .single()
 
+      // Try to get email from auth if not in profile
+      let ownerEmail = ownerProfile?.email || null
+      if (!ownerEmail) {
+        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        if (currentUser && currentUser.id === storeData.user_id) {
+          ownerEmail = currentUser.email || null
+        }
+      }
+
       // Always include the owner at the top of the list
       const allMembers = [
         {
@@ -726,7 +765,12 @@ function SettingsPageContent() {
           role: "owner",
           user_id: storeData.user_id,
           invited_at: null,
-          user: ownerProfile || { id: storeData.user_id, name: null, email: null, avatar_url: null }
+          user: {
+            id: storeData.user_id,
+            name: ownerProfile?.name || null,
+            email: ownerEmail,
+            avatar_url: ownerProfile?.avatar_url || null
+          }
         },
         ...membersWithProfiles
       ]
@@ -1510,6 +1554,10 @@ function SettingsPageContent() {
         theme_color: store.theme_color,
         currency: store.currency,
         timezone: store.timezone,
+        available_time: store.available_time || null,
+        social_media_text: store.social_media_text || null,
+        copyright_text: store.copyright_text || null,
+        show_powered_by: store.show_powered_by,
         address: store.address,
         social_links: store.social_links
       })
@@ -1849,7 +1897,12 @@ function SettingsPageContent() {
                 }`}
               >
                 <tab.icon className="h-4 w-4" />
-                {tab.label}
+                <span className="flex items-center gap-2">
+                  {tab.label}
+                  {tab.id === "domain" && store.plan === 'free' && (
+                    <Crown className="h-4 w-4 text-orange-500" weight="fill" />
+                  )}
+                </span>
               </button>
             ))}
           </nav>
@@ -1906,7 +1959,7 @@ function SettingsPageContent() {
                         : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground"
                     }`}
                   >
-                    Contact
+                    Contact & Footer
                   </button>
                 </nav>
               </div>
@@ -2297,6 +2350,62 @@ function SettingsPageContent() {
                     </div>
                   </div>
                     </div>
+
+                {/* Available Time & Social Media Text */}
+                    <div className="space-y-4 pt-4 border-t border-border/50">
+                      <div>
+                        <h4 className="text-xs font-medium mb-3">Store Information</h4>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Available Time</Label>
+                          <Input 
+                            value={store.available_time}
+                            onChange={(e) => setStore({ ...store, available_time: e.target.value })}
+                            placeholder="SAT - FRI, 10AM - 11PM"
+                          />
+                          <p className="text-xs text-muted-foreground">Display your store&apos;s operating hours</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Social Media Text</Label>
+                          <Input 
+                            value={store.social_media_text}
+                            onChange={(e) => setStore({ ...store, social_media_text: e.target.value })}
+                            placeholder="Follow us on social media for updates and offers."
+                          />
+                          <p className="text-xs text-muted-foreground">Text displayed in the footer&apos;s &quot;Follow Us&quot; section</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Copyright Text</Label>
+                          <Input 
+                            value={store.copyright_text}
+                            onChange={(e) => setStore({ ...store, copyright_text: e.target.value })}
+                            placeholder="© 2025 {store_name}. All rights reserved. Powered by Sellium"
+                          />
+                          <p className="text-xs text-muted-foreground">Footer copyright text. Use {"{store_name}"} to insert store name</p>
+                        </div>
+                        <div className="flex items-center justify-between pt-2">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <Label>Show &quot;Powered by Sellium&quot;</Label>
+                              {store.plan === 'free' && (
+                                <Crown className="h-4 w-4 text-orange-500" weight="fill" />
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {store.plan === 'free' 
+                                ? 'Available for Paid and Pro plans only'
+                                : 'Display the "Powered by Sellium" text in the footer'}
+                            </p>
+                          </div>
+                          <Switch
+                            checked={store.show_powered_by}
+                            onCheckedChange={(checked) => setStore({ ...store, show_powered_by: checked })}
+                            disabled={store.plan === 'free'}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   </div>
                 )}
@@ -2481,7 +2590,9 @@ function SettingsPageContent() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{member.user?.name || "Unknown"}</p>
-                              <p className="text-xs text-muted-foreground truncate">{member.user?.email || "-"}</p>
+                              {member.user?.email && (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">{member.user.email}</p>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0">

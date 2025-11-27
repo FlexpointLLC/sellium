@@ -327,6 +327,10 @@ CREATE TABLE IF NOT EXISTS public.stores (
   plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'paid', 'pro')),
   traffic_limit INTEGER DEFAULT 2000,
   product_limit INTEGER DEFAULT 100,
+  available_time TEXT,
+  social_media_text TEXT,
+  copyright_text TEXT,
+  show_powered_by BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
