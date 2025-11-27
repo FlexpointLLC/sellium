@@ -1,6 +1,7 @@
 "use client"
 /* eslint-disable @next/next/no-img-element */
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { 
   Phone, 
@@ -12,6 +13,7 @@ import {
   Envelope
 } from "phosphor-react"
 import { useStorefrontUrl } from "@/lib/use-storefront-url"
+import { createClient } from "@/lib/supabase/client"
 
 interface Store {
   name: string
@@ -45,9 +47,48 @@ interface StorefrontFooterProps {
   username: string
 }
 
+interface StorePage {
+  slug: string
+  title: string
+  is_published: boolean
+}
+
 export function StorefrontFooter({ store, categories = [], username }: StorefrontFooterProps) {
   const { getUrl } = useStorefrontUrl(username)
   const themeColor = store.theme_color || "#000000"
+  const [pages, setPages] = useState<StorePage[]>([])
+
+  useEffect(() => {
+    async function fetchPages() {
+      // Get store ID from username
+      const supabase = createClient()
+      const { data: storeData } = await supabase
+        .from("stores")
+        .select("id")
+        .eq("username", username)
+        .single()
+
+      if (!storeData) return
+
+      // Fetch only published pages - only the 4 specific pages
+      const { data: pagesData } = await supabase
+        .from("store_pages")
+        .select("slug, title, is_published")
+        .eq("store_id", storeData.id)
+        .eq("is_published", true)
+        .in("slug", ["about", "privacy", "shipping", "returns"])
+        .order("slug", { ascending: true })
+
+      if (pagesData) {
+        setPages(pagesData)
+      }
+    }
+
+    fetchPages()
+  }, [username])
+
+  // Only show published pages - no defaults
+  const displayPages = pages.map(p => ({ slug: p.slug, title: p.title }))
 
   return (
     <footer className="bg-white border-t border-black/10 mt-10">
@@ -112,10 +153,13 @@ export function StorefrontFooter({ store, categories = [], username }: Storefron
           <div>
             <h3 className="font-bold text-sm tracking-wide mb-4">INFORMATION</h3>
             <ul className="space-y-2 text-sm text-gray-600">
-              <li><Link href={getUrl('/about')} className="hover:text-gray-900">About Us</Link></li>
-              <li><Link href={getUrl('/privacy')} className="hover:text-gray-900">Privacy Policy</Link></li>
-              <li><Link href={getUrl('/shipping')} className="hover:text-gray-900">Shipping Information</Link></li>
-              <li><Link href={getUrl('/returns')} className="hover:text-gray-900">Returns & Refunds</Link></li>
+              {displayPages.map((page) => (
+                <li key={page.slug}>
+                  <Link href={getUrl(`/${page.slug}`)} className="hover:text-gray-900">
+                    {page.title}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 

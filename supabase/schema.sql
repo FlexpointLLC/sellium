@@ -747,6 +747,21 @@ CREATE TABLE IF NOT EXISTS public.notices (
 );
 
 -- ============================================
+-- STORE PAGES TABLE (Footer Pages)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.store_pages (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  store_id UUID REFERENCES public.stores(id) ON DELETE CASCADE NOT NULL,
+  slug TEXT NOT NULL CHECK (slug IN ('about', 'privacy', 'shipping', 'returns')),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  is_published BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(store_id, slug)
+);
+
+-- ============================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================
 
@@ -771,6 +786,9 @@ ALTER TABLE public.custom_domains ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.store_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.upgrade_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notices ENABLE ROW LEVEL SECURITY;
+
+-- Enable RLS for store_pages
+ALTER TABLE public.store_pages ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies first (to avoid conflicts)
 DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
@@ -1112,6 +1130,22 @@ CREATE POLICY "Admin can manage all notices" ON public.notices
 CREATE POLICY "Public can view active notices" ON public.notices
   FOR SELECT USING (status = 'active');
 
+-- Store pages policies
+DROP POLICY IF EXISTS "Store owners can manage their pages" ON public.store_pages;
+DROP POLICY IF EXISTS "Public can view published pages" ON public.store_pages;
+
+CREATE POLICY "Store owners can manage their pages" ON public.store_pages
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.stores
+      WHERE stores.id = store_pages.store_id
+      AND stores.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Public can view published pages" ON public.store_pages
+  FOR SELECT USING (is_published = true);
+
 -- Store members policies
 DROP POLICY IF EXISTS "Store owners can manage team members" ON public.store_members;
 DROP POLICY IF EXISTS "Team members can view their store" ON public.store_members;
@@ -1240,6 +1274,7 @@ DROP TRIGGER IF EXISTS update_orders_updated_at ON public.orders;
 DROP TRIGGER IF EXISTS update_coupons_updated_at ON public.coupons;
 DROP TRIGGER IF EXISTS update_reviews_updated_at ON public.reviews;
 DROP TRIGGER IF EXISTS update_store_settings_updated_at ON public.store_settings;
+DROP TRIGGER IF EXISTS update_store_pages_updated_at ON public.store_pages;
 DROP TRIGGER IF EXISTS update_customer_stats_on_order ON public.orders;
 
 -- Add updated_at triggers to all tables
@@ -1289,6 +1324,10 @@ CREATE TRIGGER update_reviews_updated_at
 
 CREATE TRIGGER update_store_settings_updated_at
   BEFORE UPDATE ON public.store_settings
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_store_pages_updated_at
+  BEFORE UPDATE ON public.store_pages
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Trigger to update customer stats after order changes
@@ -1390,3 +1429,8 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_store_id ON public.support_ticket
 CREATE INDEX IF NOT EXISTS idx_support_tickets_ticket_number ON public.support_tickets(ticket_number);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON public.support_tickets(status);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_created_at ON public.support_tickets(created_at);
+
+-- Store pages indexes
+CREATE INDEX IF NOT EXISTS idx_store_pages_store_id ON public.store_pages(store_id);
+CREATE INDEX IF NOT EXISTS idx_store_pages_slug ON public.store_pages(slug);
+CREATE INDEX IF NOT EXISTS idx_store_pages_published ON public.store_pages(is_published);
