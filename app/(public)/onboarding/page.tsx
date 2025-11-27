@@ -168,7 +168,7 @@ export default function OnboardingPage() {
         }
       }
 
-      // Create store
+      // Create store with default limits for free plan
       const { error: storeError } = await supabase
         .from("stores")
         .insert({
@@ -176,6 +176,9 @@ export default function OnboardingPage() {
           username: formData.username,
           name: `${formData.name.trim()}'s Store`,
           business_type: formData.businessType,
+          plan: 'free',
+          traffic_limit: 2000,
+          product_limit: 100,
         })
 
       if (storeError) {

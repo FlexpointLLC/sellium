@@ -45,7 +45,27 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'payment_settings') THEN
     ALTER TABLE public.stores ADD COLUMN payment_settings JSONB;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'traffic_limit') THEN
+    ALTER TABLE public.stores ADD COLUMN traffic_limit INTEGER DEFAULT 2000;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'product_limit') THEN
+    ALTER TABLE public.stores ADD COLUMN product_limit INTEGER DEFAULT 100;
+  END IF;
 END $$;
+
+-- Migrate existing plans to free/paid/pro
+-- Convert 'starter' to 'paid', keep 'pro', convert 'enterprise' to 'pro'
+UPDATE public.stores 
+SET plan = 'paid' 
+WHERE plan = 'starter';
+
+UPDATE public.stores 
+SET plan = 'pro' 
+WHERE plan = 'enterprise';
+
+-- Update plan constraint to only allow 'free', 'paid', or 'pro'
+ALTER TABLE public.stores DROP CONSTRAINT IF EXISTS stores_plan_check;
+ALTER TABLE public.stores ADD CONSTRAINT stores_plan_check CHECK (plan IN ('free', 'paid', 'pro'));
 
 -- Add missing columns to categories
 DO $$ 
@@ -264,7 +284,9 @@ CREATE TABLE IF NOT EXISTS public.stores (
   social_links JSONB,
   linquo_org_id TEXT,
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
-  plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'starter', 'pro', 'enterprise')),
+  plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'paid', 'pro')),
+  traffic_limit INTEGER DEFAULT 2000,
+  product_limit INTEGER DEFAULT 100,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

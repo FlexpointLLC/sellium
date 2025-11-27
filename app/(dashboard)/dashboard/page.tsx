@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Package, ShoppingCart, CurrencyDollar, Users, CheckCircle, ArrowSquareOut, Circle, ShoppingBag } from "phosphor-react"
+import { Package, ShoppingCart, CurrencyDollar, Users, CheckCircle, ArrowSquareOut, Circle, ShoppingBag, Crown } from "phosphor-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +17,8 @@ interface Store {
   plan: string
   business_type: string
   currency?: string
+  traffic_limit?: number
+  product_limit?: number
 }
 
 interface Stats {
@@ -46,10 +48,9 @@ interface TopProduct {
 }
 
 const planLimits: Record<string, { traffic: string; products: number }> = {
-  free: { traffic: "500", products: 10 },
-  starter: { traffic: "5k", products: 100 },
-  pro: { traffic: "50k", products: 1000 },
-  enterprise: { traffic: "Unlimited", products: 10000 },
+  free: { traffic: "2000", products: 100 },
+  paid: { traffic: "50k", products: 1000 },
+  pro: { traffic: "Unlimited", products: 10000 },
 }
 
 export default function DashboardPage() {
@@ -66,6 +67,7 @@ export default function DashboardPage() {
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [customDomain, setCustomDomain] = useState<{ domain: string; status: string } | null>(null)
+  const [currentTraffic, setCurrentTraffic] = useState(0)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -230,7 +232,40 @@ export default function DashboardPage() {
       ? `https://my.sellium.store/${store.username}`
       : `http://localhost:3000/${store.username}`
   const planInfo = planLimits[store.plan] || planLimits.free
+  // Use database values if available, otherwise fallback to plan defaults
+  const trafficLimit = store.traffic_limit 
+    ? store.traffic_limit >= 1000000 
+      ? "Unlimited" 
+      : store.traffic_limit >= 5000 
+        ? `${(store.traffic_limit / 1000).toFixed(0)}k`
+        : store.traffic_limit.toString()
+    : planInfo.traffic
+  const productLimit = store.product_limit ?? planInfo.products
   const statusColor = store.status === "active" ? "text-green-600 bg-green-500/10" : "text-yellow-600 bg-yellow-500/10"
+
+  // Calculate numeric traffic limit for comparison
+  const getNumericTrafficLimit = (limit: string | number): number => {
+    if (typeof limit === 'number') return limit
+    if (limit === 'Unlimited') return Infinity
+    if (limit.endsWith('k')) {
+      return parseInt(limit.replace('k', '')) * 1000
+    }
+    return parseInt(limit) || 0
+  }
+
+  const numericTrafficLimit = store.traffic_limit || getNumericTrafficLimit(planInfo.traffic)
+  const numericProductLimit = productLimit
+
+  // Check if limits are reached based on specific thresholds
+  // Free: Traffic >= 1900/2000 OR Products >= 90/100
+  // Paid: Traffic >= 49k/50k OR Products >= 995/1000
+  const trafficThreshold = store.plan === 'free' ? 1900 : 49000
+  const productThreshold = store.plan === 'free' ? 90 : 995
+
+  const showUpgradeButton = store.plan !== 'pro' && (
+    (numericTrafficLimit !== Infinity && currentTraffic >= trafficThreshold) ||
+    stats.totalProducts >= productThreshold
+  )
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -252,8 +287,20 @@ export default function DashboardPage() {
       </div>
 
       {/* Store Overview Card */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden relative">
         <CardContent className="p-6">
+          {showUpgradeButton && (
+            <Link
+              href="/dashboard/settings?tab=billing"
+              className={`absolute top-4 right-4 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                store.plan === 'free'
+                  ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                  : 'bg-purple-600 hover:bg-purple-700 text-white'
+              }`}
+            >
+              Upgrade
+            </Link>
+          )}
           <div className="flex flex-col md:flex-row gap-6">
             {/* Store Preview Thumbnail */}
             <div className="w-full md:w-48 h-[103px] rounded-lg overflow-hidden border border-border/50 bg-muted flex-shrink-0 relative group">
@@ -300,19 +347,28 @@ export default function DashboardPage() {
                     {customDomain?.status === 'verified' ? customDomain.domain : `my.sellium.store/${store.username}`}
                   </Link>
                   <ArrowSquareOut className="h-3.5 w-3.5 text-muted-foreground" />
-                  <Link href="/dashboard/settings?tab=domain" className="text-primary hover:underline">
+                  <Link href="/dashboard/settings?tab=domain" className="text-primary hover:underline flex items-center gap-1">
+                    {store.plan === 'free' && <Crown className="h-3.5 w-3.5 text-orange-500" weight="fill" />}
                     Manage Domain
                   </Link>
                 </div>
                 <div className="w-px h-4 bg-border mx-4" />
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Traffic Limit:</span>
-                  <span className="font-medium">{planInfo.traffic}</span>
+                  <span className="font-medium flex items-center gap-1">
+                    {store.plan === 'free' && <Crown className="h-3.5 w-3.5 text-orange-500" weight="fill" />}
+                    {store.plan === 'paid' && <Crown className="h-3.5 w-3.5 text-purple-500 drop-shadow-[0_0_4px_rgba(168,85,247,0.8)]" weight="fill" />}
+                    {store.plan === 'pro' ? 'Unlimited' : `${currentTraffic}/${trafficLimit}`}
+                  </span>
                 </div>
                 <div className="w-px h-4 bg-border mx-4" />
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Products</span>
-                  <span className="font-medium">{stats.totalProducts}/{planInfo.products}</span>
+                  <span className="font-medium flex items-center gap-1">
+                    {store.plan === 'free' && <Crown className="h-3.5 w-3.5 text-orange-500" weight="fill" />}
+                    {store.plan === 'paid' && <Crown className="h-3.5 w-3.5 text-purple-500 drop-shadow-[0_0_4px_rgba(168,85,247,0.8)]" weight="fill" />}
+                    {stats.totalProducts}/{productLimit}
+                  </span>
                 </div>
               </div>
             </div>

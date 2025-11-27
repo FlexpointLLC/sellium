@@ -21,6 +21,7 @@ import {
   Shield,
   Bell,
   Link as LinkIcon,
+  Crown,
 } from "phosphor-react"
 
 import {
@@ -220,7 +221,29 @@ export function DashboardSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="p-2 space-y-2">
+        {/* Upgrade Banner for Free Plan */}
+        {storePlan === 'free' && !isCollapsed && (
+          <div className="mx-2 mb-2 p-4 rounded-xl border border-orange-300 bg-orange-50 dark:bg-orange-950/20">
+            <div className="flex flex-col items-center text-center gap-3">
+              {/* Crown Icon Container */}
+              <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                <Crown className="h-5 w-5 text-orange-600 dark:text-orange-500" weight="fill" />
+              </div>
+              {/* Text */}
+              <p className="text-xs text-orange-900 dark:text-orange-100 leading-relaxed">
+                Need Custom domain, More traffic, more product limit?
+              </p>
+              {/* Upgrade Button */}
+              <Link
+                href="/dashboard/settings?tab=billing"
+                className="block w-full px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-medium rounded-md transition-colors text-center"
+              >
+                Upgrade
+              </Link>
+            </div>
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center gap-3 px-2 py-2">
             <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
@@ -266,14 +289,19 @@ export function DashboardSidebar() {
                       <h3 className="font-semibold text-sm truncate">
                         {userProfile?.name || "User"}
                       </h3>
-                      {storePlan && storePlan !== "free" && (
+                      {storePlan === "paid" && (
                         <span className="px-2 py-0.5 text-[10px] font-semibold bg-yellow-500/20 text-yellow-600 dark:text-yellow-500 rounded border border-yellow-500/30">
-                          {storePlan.charAt(0).toUpperCase() + storePlan.slice(1)}
+                          Paid
+                        </span>
+                      )}
+                      {storePlan === "pro" && (
+                        <span className="px-2 py-0.5 text-[10px] font-semibold bg-purple-500/20 text-purple-600 dark:text-purple-500 rounded border border-purple-500/30">
+                          Pro
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      {storePlan ? `${storePlan.charAt(0).toUpperCase() + storePlan.slice(1)} Plan` : "Free Plan"} • {storeUsername || "No store"}
+                      {storePlan === "paid" ? "Paid Plan" : storePlan === "pro" ? "Pro Plan" : "Free Plan"} • {storeUsername || "No store"}
                     </p>
                   </div>
                 </div>
