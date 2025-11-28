@@ -30,7 +30,7 @@ const AvatarImage = React.forwardRef<HTMLImageElement, AvatarImageProps>(
     <img
       ref={ref}
       alt={alt}
-      className={cn("aspect-square h-full w-full object-cover", className)}
+      className={cn("aspect-square h-full w-full object-cover absolute inset-0", className)}
       {...props}
     />
   )
@@ -46,7 +46,7 @@ const AvatarFallback = React.forwardRef<HTMLDivElement, AvatarFallbackProps>(
     <div
       ref={ref}
       className={cn(
-        "flex h-full w-full items-center justify-center rounded-full bg-muted",
+        "flex h-full w-full items-center justify-center rounded-full bg-muted absolute inset-0",
         className
       )}
       {...props}

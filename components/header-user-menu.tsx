@@ -114,7 +114,15 @@ export function HeaderUserMenu() {
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-2 pl-2 pr-4 h-9 rounded-[100px] border border-border/50 hover:border-border transition-colors">
           <Avatar className="h-6 w-6 flex-shrink-0">
-            <AvatarImage src={userProfile?.avatar_url || undefined} alt={userProfile?.name || "User"} />
+            {userProfile?.avatar_url && userProfile.avatar_url.trim() !== '' ? (
+              <AvatarImage 
+                src={userProfile.avatar_url} 
+                alt={userProfile?.name || "User"}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
+            ) : null}
             <AvatarFallback className="bg-primary/10 text-primary text-[10px]">
               {userProfile?.name ? getInitials(userProfile.name) : <User className="h-3 w-3" />}
             </AvatarFallback>
@@ -129,7 +137,15 @@ export function HeaderUserMenu() {
         <div className="px-4 py-3 border-b">
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12 flex-shrink-0">
-              <AvatarImage src={userProfile?.avatar_url || undefined} alt={userProfile?.name || "User"} />
+              {userProfile?.avatar_url && userProfile.avatar_url.trim() !== '' ? (
+                <AvatarImage 
+                  src={userProfile.avatar_url} 
+                  alt={userProfile?.name || "User"}
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
+                />
+              ) : null}
               <AvatarFallback className="bg-primary/10 text-primary">
                 {userProfile?.name ? getInitials(userProfile.name) : <User className="h-6 w-6" />}
               </AvatarFallback>
