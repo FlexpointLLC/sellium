@@ -189,7 +189,7 @@ function SortableProductRow({
           </div>
           <div>
             <span className="font-medium">{product.name}</span>
-            {product.variant_count && product.variant_count > 0 && (
+            {(product.variant_count ?? 0) > 0 && (
               <span className="ml-2 text-xs text-muted-foreground">
                 {product.variant_count} variants
               </span>
@@ -1021,7 +1021,7 @@ export default function ProductsPage() {
 
           // Same SKU, same name/slug - UPDATE existing product
           const productData = {
-            name: formData.name.trim(),
+            name: String(formData.name || "").trim(),
             slug: productSlug,
             description: formData.description.trim() || null,
             price: parseFloat(formData.price) || 0,
@@ -1119,7 +1119,7 @@ export default function ProductsPage() {
     // No existing SKU or no SKU provided - create new product
     const productData = {
       store_id: store.id,
-      name: formData.name.trim(),
+      name: String(formData.name || "").trim(),
       slug: productSlug,
       description: formData.description.trim() || null,
       price: parseFloat(formData.price) || 0,
@@ -1204,7 +1204,15 @@ export default function ProductsPage() {
       await deleteImagesFromStorage(imagesToDelete)
     }
     
-    setProducts([{ ...data, has_variants: formData.has_variants, variant_count: variantCount, stock: totalStock }, ...products])
+    // Ensure name is a string and not concatenated with numbers
+    const productToAdd = {
+      ...data,
+      name: String(data.name || "").trim(),
+      has_variants: formData.has_variants,
+      variant_count: variantCount,
+      stock: totalStock
+    }
+    setProducts([productToAdd, ...products])
     setIsAddDialogOpen(false)
     resetForm()
     setSaving(false)
@@ -1373,7 +1381,7 @@ export default function ProductsPage() {
       : parseInt(formData.stock) || 0
 
     const productData = {
-      name: formData.name.trim(),
+      name: String(formData.name || "").trim(),
       slug: productSlug,
       description: formData.description.trim() || null,
       price: parseFloat(formData.price) || 0,
