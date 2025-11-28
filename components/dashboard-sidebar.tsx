@@ -266,6 +266,11 @@ export function DashboardSidebar() {
       <SidebarContent>
         {menuGroups
           .filter((group) => {
+            // Hide Admin section by default - only show for admin users
+            if (group.label === 'Admin') {
+              return userRole === 'admin'
+            }
+            
             // Filter menu groups based on role
             if (userRole === 'rider') {
               // Rider can only see Home and Orders
@@ -280,8 +285,8 @@ export function DashboardSidebar() {
               // Owner cannot see Admin section
               return group.label !== 'Admin'
             }
-            // Admin can see everything including Admin section
-            return true
+            // For other roles or loading state, show all except Admin
+            return group.label !== 'Admin'
           })
           .map((group) => (
             <SidebarGroup key={group.label}>
