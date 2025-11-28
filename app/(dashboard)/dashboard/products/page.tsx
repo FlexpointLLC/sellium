@@ -120,6 +120,7 @@ interface ProductVariant {
 interface Store {
   id: string
   username: string
+  currency: string
 }
 
 // Cascading Category Dropdown Component
@@ -127,11 +128,13 @@ interface Store {
 function SortableProductRow({ 
   product, 
   onEdit, 
-  onDelete 
+  onDelete,
+  currency
 }: { 
   product: Product
   onEdit: () => void
   onDelete: () => void
+  currency: string
 }) {
   const {
     attributes,
@@ -146,6 +149,17 @@ function SortableProductRow({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+  }
+
+  function formatCurrency(amount: number, currencyCode: string) {
+    const symbols: Record<string, string> = {
+      BDT: "৳",
+      USD: "$",
+      EUR: "€",
+      GBP: "£",
+      INR: "₹"
+    }
+    return `${symbols[currencyCode] || currencyCode} ${amount.toFixed(2)}`
   }
 
   return (
@@ -186,7 +200,7 @@ function SortableProductRow({
         {product.sku || "-"}
       </td>
       <td className="px-6 py-4 font-medium">
-        ${product.price.toFixed(2)}
+        {formatCurrency(product.price, currency)}
       </td>
       <td className="px-6 py-4">
         {product.stock}
@@ -391,7 +405,7 @@ export default function ProductsPage() {
     // Fetch store
     const { data: storeData } = await supabase
       .from("stores")
-      .select("id, username")
+      .select("id, username, currency")
       .eq("user_id", user.id)
       .single()
 
@@ -2112,6 +2126,7 @@ export default function ProductsPage() {
                       product={product}
                       onEdit={() => openEditDialog(product)}
                       onDelete={() => openDeleteDialog(product)}
+                      currency={store?.currency || "USD"}
                     />
                   ))}
                 </SortableContext>

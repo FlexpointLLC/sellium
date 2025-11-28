@@ -32,6 +32,7 @@ interface EarningsData {
 interface Store {
   id: string
   name: string
+  currency: string
 }
 
 const statusColors: Record<string, string> = {
@@ -79,7 +80,7 @@ export default function EarningsPage() {
     // Fetch store
     const { data: storeData } = await supabase
       .from("stores")
-      .select("id, name")
+      .select("id, name, currency")
       .eq("user_id", user.id)
       .single()
 
@@ -181,10 +182,15 @@ export default function EarningsPage() {
   }
 
   function formatCurrency(amount: number) {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount)
+    const currency = store?.currency || "USD"
+    const symbols: Record<string, string> = {
+      BDT: "৳",
+      USD: "$",
+      EUR: "€",
+      GBP: "£",
+      INR: "₹"
+    }
+    return `${symbols[currency] || currency} ${amount.toFixed(2)}`
   }
 
   const growthPercent = earningsData.lastMonth > 0
@@ -349,7 +355,7 @@ export default function EarningsPage() {
                     .reduce((sum, t) => sum + t.amount, 0) /
                   transactions.filter(t => t.type === "sale").length
                 )
-              : "$0.00"
+              : formatCurrency(0)
             }
           </p>
         </div>

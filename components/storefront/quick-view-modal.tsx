@@ -90,6 +90,7 @@ export function QuickViewModal({
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [variants, setVariants] = useState<ProductVariant[]>([])
+  const [variantTemplates, setVariantTemplates] = useState<Array<{ name: string; display_name: string; options: string[] }>>([])
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
@@ -130,6 +131,27 @@ export function QuickViewModal({
       setSelectedVariant(variantsData[0])
       setSelectedOptions(variantsData[0].options || {})
     }
+    
+    // Fetch variant templates to preserve option order
+    // First get the store_id from the product
+    const { data: productData } = await supabase
+      .from("products")
+      .select("store_id")
+      .eq("id", productId)
+      .single()
+    
+    if (productData) {
+      const { data: templatesData } = await supabase
+        .from("variants")
+        .select("name, display_name, options")
+        .eq("store_id", productData.store_id)
+        .order("sort_order", { ascending: true })
+
+      if (templatesData) {
+        setVariantTemplates(templatesData)
+      }
+    }
+    
     setLoading(false)
   }
 
@@ -142,18 +164,72 @@ export function QuickViewModal({
       ? [product.image_url] 
       : []
 
-  // Get unique option names and values from variants
+  // Get unique option names and values from variants, preserving template order
   const optionGroups: Record<string, string[]> = {}
+  
+  // First, get all option names from variant templates to preserve order
+  variantTemplates.forEach(template => {
+    const optionKey = template.display_name || template.name
+    if (template.options && template.options.length > 0) {
+      optionGroups[optionKey] = []
+    }
+  })
+  
+  // Then, populate values from variants, but maintain template order
   variants.forEach(variant => {
     if (variant.options) {
       Object.entries(variant.options).forEach(([key, value]) => {
-        if (!optionGroups[key]) {
-          optionGroups[key] = []
-        }
-        if (!optionGroups[key].includes(value)) {
-          optionGroups[key].push(value)
+        // Find matching template by name or display_name
+        const matchingTemplate = variantTemplates.find(
+          t => t.name === key || t.display_name === key
+        )
+        
+        if (matchingTemplate) {
+          // Use template's display_name as the key
+          const optionKey = matchingTemplate.display_name || matchingTemplate.name
+          if (!optionGroups[optionKey]) {
+            optionGroups[optionKey] = []
+          }
+          // Only add if not already present, and maintain template order
+          if (!optionGroups[optionKey].includes(value)) {
+            // Find the position in template options
+            const templateIndex = matchingTemplate.options.indexOf(value)
+            if (templateIndex !== -1) {
+              // Insert at the correct position based on template order
+              optionGroups[optionKey].splice(templateIndex, 0, value)
+            } else {
+              // If not in template, add to end
+              optionGroups[optionKey].push(value)
+            }
+          }
+        } else {
+          // Fallback: if no template found, use original behavior
+          if (!optionGroups[key]) {
+            optionGroups[key] = []
+          }
+          if (!optionGroups[key].includes(value)) {
+            optionGroups[key].push(value)
+          }
         }
       })
+    }
+  })
+  
+  // Sort values within each option group based on template order
+  Object.keys(optionGroups).forEach(optionKey => {
+    const matchingTemplate = variantTemplates.find(
+      t => t.display_name === optionKey || t.name === optionKey
+    )
+    if (matchingTemplate) {
+      // Reorder based on template order
+      const orderedValues = matchingTemplate.options.filter(
+        opt => optionGroups[optionKey].includes(opt)
+      )
+      // Add any values not in template to the end
+      const extraValues = optionGroups[optionKey].filter(
+        opt => !matchingTemplate.options.includes(opt)
+      )
+      optionGroups[optionKey] = [...orderedValues, ...extraValues]
     }
   })
 

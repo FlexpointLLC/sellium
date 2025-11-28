@@ -2,11 +2,29 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Stack, Plus, MagnifyingGlass, Pencil, Trash, X } from "phosphor-react"
+import { Stack, Plus, MagnifyingGlass, Pencil, Trash, X, DotsSixVertical } from "phosphor-react"
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -39,6 +57,79 @@ interface Store {
   id: string
 }
 
+// Sortable Option Item Component
+function SortableOptionItem({ 
+  id,
+  index,
+  option,
+  onUpdate,
+  onRemove,
+  canRemove
+}: { 
+  id: string
+  index: number
+  option: string
+  onUpdate: (index: number, value: string) => void
+  onRemove: (index: number) => void
+  canRemove: boolean
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: isDragging ? undefined : transition || 'transform 200ms ease',
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 50 : 'auto',
+    position: 'relative' as const,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2 ${
+        isDragging 
+          ? 'shadow-lg border-2 border-primary/20 bg-background rounded-md' 
+          : ''
+      }`}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
+        type="button"
+      >
+        <DotsSixVertical className="h-5 w-5" />
+      </button>
+      <Input
+        placeholder={`Value ${index + 1}`}
+        value={option}
+        onChange={(e) => onUpdate(index, e.target.value)}
+        className="flex-1"
+        disabled={isDragging}
+      />
+      {canRemove && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          onClick={() => onRemove(index)}
+          disabled={isDragging}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  )
+}
+
 export default function VariantsPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -46,6 +137,18 @@ export default function VariantsPage() {
   const [variants, setVariants] = useState<VariantTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+
+  // Drag and drop sensors for option values
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   // Dialog states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -267,6 +370,27 @@ export default function VariantsPage() {
     v.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  function handleOptionDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    const oldIndex = formData.options.findIndex((_, i) => `option-${i}` === active.id)
+    const newIndex = formData.options.findIndex((_, i) => `option-${i}` === over.id)
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return
+    }
+
+    const reorderedOptions = arrayMove(formData.options, oldIndex, newIndex)
+    setFormData({
+      ...formData,
+      options: reorderedOptions
+    })
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl flex flex-col gap-6">
@@ -436,27 +560,30 @@ export default function VariantsPage() {
 
             <div className="space-y-2">
               <Label>Option Values *</Label>
-              <div className="space-y-2">
-                {formData.options.map((option, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <Input
-                      placeholder={`Value ${index + 1}`}
-                      value={option}
-                      onChange={(e) => updateOptionValue(index, e.target.value)}
-                    />
-                    {formData.options.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0"
-                        onClick={() => removeOptionValue(index)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleOptionDragEnd}
+              >
+                <SortableContext
+                  items={formData.options.map((_, i) => `option-${i}`)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2 relative">
+                    {formData.options.map((option, index) => (
+                      <SortableOptionItem
+                        key={`option-${index}`}
+                        id={`option-${index}`}
+                        index={index}
+                        option={option}
+                        onUpdate={updateOptionValue}
+                        onRemove={removeOptionValue}
+                        canRemove={formData.options.length > 1}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </SortableContext>
+              </DndContext>
               <Button
                 variant="outline"
                 onClick={addOptionValue}
@@ -515,27 +642,30 @@ export default function VariantsPage() {
 
             <div className="space-y-2">
               <Label>Option Values *</Label>
-              <div className="space-y-2">
-                {formData.options.map((option, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <Input
-                      placeholder={`Value ${index + 1}`}
-                      value={option}
-                      onChange={(e) => updateOptionValue(index, e.target.value)}
-                    />
-                    {formData.options.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0"
-                        onClick={() => removeOptionValue(index)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleOptionDragEnd}
+              >
+                <SortableContext
+                  items={formData.options.map((_, i) => `option-${i}`)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2 relative">
+                    {formData.options.map((option, index) => (
+                      <SortableOptionItem
+                        key={`option-${index}`}
+                        id={`option-${index}`}
+                        index={index}
+                        option={option}
+                        onUpdate={updateOptionValue}
+                        onRemove={removeOptionValue}
+                        canRemove={formData.options.length > 1}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </SortableContext>
+              </DndContext>
               <Button
                 variant="outline"
                 onClick={addOptionValue}

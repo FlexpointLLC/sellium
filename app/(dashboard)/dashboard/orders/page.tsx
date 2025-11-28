@@ -469,7 +469,7 @@ export default function OrdersPage() {
           <div className="rounded-lg border bg-card p-4">
             <p className="text-sm text-muted-foreground">Total Revenue</p>
             <p className="text-2xl font-semibold">
-              ${orders.filter(o => o.payment_status === "paid").reduce((sum, o) => sum + o.total, 0).toFixed(2)}
+              {formatCurrency(orders.filter(o => o.payment_status === "paid").reduce((sum, o) => sum + o.total, 0))}
             </p>
           </div>
         </div>
@@ -606,7 +606,7 @@ export default function OrdersPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm">{order.item_count}</td>
-                  <td className="px-6 py-4 text-sm font-medium">${order.total.toFixed(2)}</td>
+                  <td className="px-6 py-4 text-sm font-medium">{formatCurrency(order.total)}</td>
                   <td className="px-6 py-4 text-sm">
                     <Select
                       value={order.status}

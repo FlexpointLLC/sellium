@@ -135,6 +135,7 @@ function ProductDetailContent({
   const [store, setStore] = useState<Store | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [variants, setVariants] = useState<ProductVariant[]>([])
+  const [variantTemplates, setVariantTemplates] = useState<Array<{ name: string; display_name: string; options: string[] }>>([])
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -264,6 +265,22 @@ function ProductDetailContent({
       setSelectedOptions(variantsData[0].options || {})
     }
 
+    // Fetch variant templates to preserve option order (non-blocking)
+    try {
+      const { data: templatesData } = await supabase
+        .from("variants")
+        .select("name, display_name, options")
+        .eq("store_id", storeData.id)
+        .order("sort_order", { ascending: true })
+
+      if (templatesData) {
+        setVariantTemplates(templatesData)
+      }
+    } catch (error) {
+      console.error("Error fetching variant templates:", error)
+      // Continue even if templates fail to load
+    }
+
     setLoading(false)
   }
 
@@ -274,20 +291,65 @@ function ProductDetailContent({
       ? [product.image_url] 
       : []
 
-  // Get unique option names and values from variants
+  // Get unique option names and values from variants, preserving template order
   const optionGroups: Record<string, string[]> = {}
-  variants.forEach(variant => {
-    if (variant.options) {
-      Object.entries(variant.options).forEach(([key, value]) => {
-        if (!optionGroups[key]) {
-          optionGroups[key] = []
+  
+  if (variants && variants.length > 0) {
+    try {
+      // First, collect all unique option values from variants
+      const optionValuesMap: Record<string, Set<string>> = {}
+      variants.forEach(variant => {
+        if (variant.options && typeof variant.options === 'object') {
+          Object.entries(variant.options).forEach(([key, value]) => {
+            if (key && value) {
+              if (!optionValuesMap[key]) {
+                optionValuesMap[key] = new Set()
+              }
+              optionValuesMap[key].add(String(value))
+            }
+          })
         }
-        if (!optionGroups[key].includes(value)) {
-          optionGroups[key].push(value)
+      })
+      
+      // Then, build optionGroups respecting template order
+      Object.keys(optionValuesMap).forEach(key => {
+        // Find matching template by name or display_name
+        const matchingTemplate = variantTemplates?.find(
+          t => (t.name === key || t.display_name === key)
+        )
+        
+        const optionKey = matchingTemplate ? (matchingTemplate.display_name || matchingTemplate.name) : key
+        const values = Array.from(optionValuesMap[key])
+        
+        if (matchingTemplate && matchingTemplate.options && Array.isArray(matchingTemplate.options)) {
+          // Reorder based on template order
+          const orderedValues = matchingTemplate.options.filter(opt => values.includes(String(opt)))
+          const extraValues = values.filter(opt => !matchingTemplate.options.includes(opt))
+          optionGroups[optionKey] = [...orderedValues, ...extraValues]
+        } else {
+          // No template found, use original order
+          optionGroups[optionKey] = values
+        }
+      })
+    } catch (error) {
+      console.error("Error building option groups:", error)
+      // Fallback to simple logic
+      variants.forEach(variant => {
+        if (variant.options && typeof variant.options === 'object') {
+          Object.entries(variant.options).forEach(([key, value]) => {
+            if (key && value) {
+              if (!optionGroups[key]) {
+                optionGroups[key] = []
+              }
+              if (!optionGroups[key].includes(String(value))) {
+                optionGroups[key].push(String(value))
+              }
+            }
+          })
         }
       })
     }
-  })
+  }
 
   // Find matching variant based on selected options
   const findMatchingVariant = (options: Record<string, string>) => {
@@ -396,7 +458,13 @@ function ProductDetailContent({
     )
   }
 
-  if (error || !product || !store) {
+  if (error) {
+    console.error("Product page error:", error)
+    return notFound()
+  }
+
+  if (!product || !store) {
+    console.error("Missing product or store:", { product: !!product, store: !!store })
     return notFound()
   }
 

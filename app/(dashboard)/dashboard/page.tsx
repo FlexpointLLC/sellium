@@ -73,6 +73,18 @@ export default function DashboardPage() {
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
   const [userRole, setUserRole] = useState<string>('owner')
 
+  function formatCurrency(amount: number) {
+    const currency = store?.currency || "USD"
+    const symbols: Record<string, string> = {
+      BDT: "৳",
+      USD: "$",
+      EUR: "€",
+      GBP: "£",
+      INR: "₹"
+    }
+    return `${symbols[currency] || currency} ${amount.toFixed(2)}`
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -391,7 +403,7 @@ export default function DashboardPage() {
               <CurrencyDollar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
               <p className="text-xs text-muted-foreground">
                 +0% from last month
               </p>
@@ -492,7 +504,7 @@ export default function DashboardPage() {
                           {displayName}
                           {hasMoreItems && <span className="text-muted-foreground"> +{itemCount - 1} more</span>}
                         </p>
-                        <p className="text-xs text-muted-foreground">${displayPrice.toFixed(2)}</p>
+                        <p className="text-xs text-muted-foreground">{formatCurrency(displayPrice)}</p>
                       </div>
                       <OrderStatusBadge status={order.status} />
                     </div>
@@ -546,7 +558,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{product.name}</p>
-                      <p className="text-xs text-muted-foreground">${product.price.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">{formatCurrency(product.price)}</p>
                     </div>
                     <div className="text-right">
                       <span className="text-sm font-semibold">{product.total_sold}</span>

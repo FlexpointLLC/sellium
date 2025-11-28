@@ -1520,6 +1520,7 @@ function SettingsPageContent() {
         .from("stores")
         .update({
           payment_settings: updatedPaymentSettings,
+          currency: store.currency,
           updated_at: new Date().toISOString()
         })
         .eq("id", storeId)

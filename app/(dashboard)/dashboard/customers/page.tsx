@@ -56,6 +56,7 @@ interface Customer {
 interface Store {
   id: string
   name: string
+  currency: string
 }
 
 const statusColors: Record<string, string> = {
@@ -113,7 +114,7 @@ export default function CustomersPage() {
     // Fetch store
     const { data: storeData } = await supabase
       .from("stores")
-      .select("id, name")
+      .select("id, name, currency")
       .eq("user_id", user.id)
       .single()
 
@@ -136,6 +137,18 @@ export default function CustomersPage() {
     }
 
     setLoading(false)
+  }
+
+  function formatCurrency(amount: number) {
+    const currency = store?.currency || "USD"
+    const symbols: Record<string, string> = {
+      BDT: "৳",
+      USD: "$",
+      EUR: "€",
+      GBP: "£",
+      INR: "₹"
+    }
+    return `${symbols[currency] || currency} ${amount.toFixed(2)}`
   }
 
   function resetForm() {
@@ -319,7 +332,7 @@ export default function CustomersPage() {
       customer.email,
       customer.phone || "",
       customer.total_orders.toString(),
-      `$${customer.total_spent.toFixed(2)}`,
+      formatCurrency(customer.total_spent),
       customer.status,
       formatDate(customer.created_at)
     ])
@@ -394,7 +407,7 @@ export default function CustomersPage() {
           <div className="rounded-lg border bg-card p-4">
             <p className="text-sm text-muted-foreground">Total Revenue</p>
             <p className="text-2xl font-semibold">
-              ${customers.reduce((sum, c) => sum + c.total_spent, 0).toFixed(2)}
+              {formatCurrency(customers.reduce((sum, c) => sum + c.total_spent, 0))}
             </p>
           </div>
         </div>
@@ -465,7 +478,7 @@ export default function CustomersPage() {
                   </td>
                   <td className="px-6 py-4 text-muted-foreground">{customer.email}</td>
                   <td className="px-6 py-4">{customer.total_orders}</td>
-                  <td className="px-6 py-4 font-medium">${customer.total_spent.toFixed(2)}</td>
+                  <td className="px-6 py-4 font-medium">{formatCurrency(customer.total_spent)}</td>
                   <td className="px-6 py-4">
                     <Select
                       value={customer.status}
@@ -739,7 +752,7 @@ export default function CustomersPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Spent</p>
-                  <p className="font-medium">${selectedCustomer.total_spent.toFixed(2)}</p>
+                  <p className="font-medium">{formatCurrency(selectedCustomer.total_spent)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Joined</p>
