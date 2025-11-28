@@ -33,6 +33,7 @@ export function HeaderUserMenu() {
   const [storeUsername, setStoreUsername] = useState<string | null>(null)
   const [storePlan, setStorePlan] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
     async function fetchUserData() {
@@ -62,12 +63,14 @@ export function HeaderUserMenu() {
           email: userEmail,
           avatar_url: profile.avatar_url,
         })
+        setImageError(false) // Reset error state when profile changes
       } else {
         setUserProfile({
           name: null,
           email: userEmail,
           avatar_url: null,
         })
+        setImageError(false)
       }
 
       // Fetch store username and plan
@@ -114,18 +117,23 @@ export function HeaderUserMenu() {
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-2 pl-2 pr-4 h-9 rounded-[100px] border border-border/50 hover:border-border transition-colors">
           <Avatar className="h-6 w-6 flex-shrink-0">
-            {userProfile?.avatar_url && userProfile.avatar_url.trim() !== '' ? (
+            {userProfile?.avatar_url && userProfile.avatar_url.trim() !== '' && !imageError ? (
               <AvatarImage 
                 src={userProfile.avatar_url} 
                 alt={userProfile?.name || "User"}
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none'
+                onError={() => {
+                  setImageError(true)
+                }}
+                onLoad={() => {
+                  setImageError(false)
                 }}
               />
             ) : null}
-            <AvatarFallback className="bg-primary/10 text-primary text-[10px]">
-              {userProfile?.name ? getInitials(userProfile.name) : <User className="h-3 w-3" />}
-            </AvatarFallback>
+            {(!userProfile?.avatar_url || userProfile.avatar_url.trim() === '' || imageError) && (
+              <AvatarFallback className="bg-primary/10 text-primary text-[10px]">
+                {userProfile?.name ? getInitials(userProfile.name) : <User className="h-3 w-3" />}
+              </AvatarFallback>
+            )}
           </Avatar>
           <span className="text-sm font-medium truncate max-w-[120px]">
             {userProfile?.name || "User"}
@@ -137,18 +145,23 @@ export function HeaderUserMenu() {
         <div className="px-4 py-3 border-b">
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12 flex-shrink-0">
-              {userProfile?.avatar_url && userProfile.avatar_url.trim() !== '' ? (
+              {userProfile?.avatar_url && userProfile.avatar_url.trim() !== '' && !imageError ? (
                 <AvatarImage 
                   src={userProfile.avatar_url} 
                   alt={userProfile?.name || "User"}
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none'
+                  onError={() => {
+                    setImageError(true)
+                  }}
+                  onLoad={() => {
+                    setImageError(false)
                   }}
                 />
               ) : null}
-              <AvatarFallback className="bg-primary/10 text-primary">
-                {userProfile?.name ? getInitials(userProfile.name) : <User className="h-6 w-6" />}
-              </AvatarFallback>
+              {(!userProfile?.avatar_url || userProfile.avatar_url.trim() === '' || imageError) && (
+                <AvatarFallback className="bg-primary/10 text-primary">
+                  {userProfile?.name ? getInitials(userProfile.name) : <User className="h-6 w-6" />}
+                </AvatarFallback>
+              )}
             </Avatar>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">

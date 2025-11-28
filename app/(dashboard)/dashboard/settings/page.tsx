@@ -1306,6 +1306,38 @@ function SettingsPageContent() {
     }
   }
 
+  // Remove avatar image
+  async function handleRemoveAvatar() {
+    if (!profile.avatar_url || !storeId) return
+
+    setUploadingAvatar(true)
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Delete from storage
+      if (profile.avatar_url) {
+        const oldPath = profile.avatar_url.split('/').slice(-2).join('/')
+        await supabase.storage.from('Sellium').remove([`avatars/${oldPath}`])
+      }
+
+      // Update database
+      await supabase
+        .from("profiles")
+        .update({ avatar_url: null })
+        .eq("id", user.id)
+
+      setProfile({ ...profile, avatar_url: "" })
+      toast.success("Avatar removed successfully")
+    } catch (error) {
+      console.error("Avatar removal error:", error)
+      toast.error("Failed to remove avatar")
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
   // Upload store logo
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -2539,11 +2571,23 @@ function SettingsPageContent() {
               <div className="space-y-6">
                 {/* Avatar */}
                 <div className="flex items-center gap-6">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted overflow-hidden border border-border/50">
-                    {profile.avatar_url ? (
-                      <img src={profile.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
-                    ) : (
-                      <User className="h-8 w-8 text-muted-foreground" />
+                  <div className="relative">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted overflow-hidden border border-border/50">
+                      {profile.avatar_url ? (
+                        <img src={profile.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
+                      ) : (
+                        <User className="h-8 w-8 text-muted-foreground" />
+                      )}
+                    </div>
+                    {profile.avatar_url && (
+                      <button
+                        onClick={handleRemoveAvatar}
+                        disabled={uploadingAvatar}
+                        className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm border-2 border-white"
+                        title="Remove photo"
+                      >
+                        <X className="h-3 w-3" weight="bold" />
+                      </button>
                     )}
                   </div>
                   <div>
