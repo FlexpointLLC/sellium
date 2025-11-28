@@ -476,7 +476,7 @@ function SettingsPageContent() {
 
   useEffect(() => {
     if (currentStore) {
-      fetchData()
+    fetchData()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStore])

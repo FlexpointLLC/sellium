@@ -37,7 +37,11 @@ CREATE POLICY "Store members can view their stores" ON public.stores
 -- ============================================
 -- UPDATE CATEGORIES POLICIES
 -- ============================================
+-- Drop old policies first
+DROP POLICY IF EXISTS "Store owners can manage categories" ON public.categories;
 DROP POLICY IF EXISTS "Store members can manage categories" ON public.categories;
+
+-- Create new policy that allows both owners and members
 CREATE POLICY "Store members can manage categories" ON public.categories
   FOR ALL USING (
     public.is_store_member_or_owner(categories.store_id)

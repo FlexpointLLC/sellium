@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { createClient } from "@/lib/supabase/client"
+import { useStore } from "@/lib/store-context"
 import {
   Dialog,
   DialogContent,
@@ -334,6 +335,7 @@ function CategoryDropdown({
 export default function ProductsPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { currentStore } = useStore()
   const [store, setStore] = useState<Store | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -357,6 +359,8 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [slugError, setSlugError] = useState<string>("")
+  const validationRef = useRef<string>("") // Track which slug we're validating
   
   // Wizard step (1: Basic Info, 2: Options, 3: Variants)
   const [wizardStep, setWizardStep] = useState(1)
@@ -390,31 +394,35 @@ export default function ProductsPage() {
   const [generatedVariants, setGeneratedVariants] = useState<ProductVariant[]>([])
 
   useEffect(() => {
-    fetchData()
+    if (currentStore) {
+      fetchData()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [currentStore])
 
   async function fetchData() {
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      router.push("/login")
+    if (!currentStore) {
+      setLoading(false)
       return
     }
 
-    // Fetch store
+    // Fetch full store data including currency
     const { data: storeData } = await supabase
       .from("stores")
       .select("id, username, currency")
-      .eq("user_id", user.id)
+      .eq("id", currentStore.store_id)
       .single()
 
-    if (!storeData) {
-      router.push("/onboarding")
+    if (storeData) {
+      setStore({
+        id: storeData.id,
+        username: storeData.username,
+        currency: storeData.currency || "USD"
+      })
+    } else {
+      setLoading(false)
       return
     }
-
-    setStore(storeData)
 
     // Fetch products
     const { data: productsData, error: productsError } = await supabase
@@ -501,15 +509,100 @@ export default function ProductsPage() {
       .replace(/(^-|-$)/g, "")
   }
 
-  function handleNameChange(name: string) {
+  async function handleNameChange(name: string) {
+    const newSlug = generateSlug(name)
+    
+    // Update form data
     setFormData({
       ...formData,
       name,
-      slug: generateSlug(name)
+      slug: newSlug
     })
+    
+    // Clear error when slug changes
+    setSlugError("")
+    
+    // Track which slug we're validating to prevent race conditions
+    validationRef.current = newSlug
+    
+    // Validate the auto-generated slug if it's not empty
+    // Use currentStore from context instead of local store state
+    // Works for both add and edit dialogs
+    if (newSlug.trim() && currentStore?.store_id) {
+      try {
+        // When editing, exclude the current product ID from the check
+        // When adding, excludeId will be undefined (check all products)
+        const excludeId = isEditDialogOpen ? selectedProduct?.id : undefined
+        
+        // Always validate
+        const exists = await checkProductSlugExists(newSlug, excludeId)
+        
+        // Only set error if the slug hasn't changed since we started validation
+        // This prevents race conditions when user types quickly
+        if (validationRef.current === newSlug && exists) {
+          setSlugError("Slug already exists")
+        }
+      } catch (error) {
+        console.error("Error validating slug:", error)
+      }
+    }
+  }
+
+  // Check if product slug already exists
+  async function checkProductSlugExists(slug: string, excludeId?: string): Promise<boolean> {
+    // Use currentStore from context instead of local store state
+    const storeId = currentStore?.store_id || store?.id
+    if (!storeId || !slug.trim()) return false
+
+    try {
+      let query = supabase
+        .from("products")
+        .select("id")
+        .eq("store_id", storeId)
+        .eq("slug", slug.trim())
+
+      if (excludeId) {
+        query = query.neq("id", excludeId)
+      }
+
+      const { data, error } = await query.maybeSingle()
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" which is fine
+        console.error("Error checking slug:", error)
+        return false
+      }
+
+      return !!data
+    } catch (error) {
+      console.error("Error checking slug:", error)
+      return false
+    }
+  }
+
+  async function handleProductSlugChange(slug: string) {
+    setFormData({ ...formData, slug })
+    setSlugError("")
+    
+    // Track which slug we're validating
+    validationRef.current = slug
+
+    if (!slug.trim()) {
+      return
+    }
+
+    // Check if slug exists (only when editing, exclude current product)
+    const excludeId = isEditDialogOpen ? selectedProduct?.id : undefined
+    const exists = await checkProductSlugExists(slug, excludeId)
+    
+    // Only set error if the slug hasn't changed since we started validation
+    if (validationRef.current === slug && exists) {
+      setSlugError("Slug already exists")
+    }
   }
 
   function resetForm() {
+    validationRef.current = ""
+    setSlugError("")
     setFormData({
       name: "",
       slug: "",
@@ -525,6 +618,8 @@ export default function ProductsPage() {
       images: []
     })
     setProductOptions([])
+    setSlugError("")
+    setFormError(null)
     setGeneratedVariants([])
     setWizardStep(1)
     setEditWizardStep(1)
@@ -1241,10 +1336,22 @@ export default function ProductsPage() {
   async function handleEditProduct() {
     if (!selectedProduct || !formData.name.trim()) return
 
+    // Validate slug before proceeding
+    const productSlug = formData.slug || generateSlug(formData.name)
+    const slugExists = await checkProductSlugExists(productSlug, selectedProduct.id)
+    
+    if (slugExists) {
+      setSlugError("Slug already exists")
+      return
+    }
+
+    if (slugError) {
+      return // Don't proceed if there's a slug error
+    }
+
     setSaving(true)
 
     const variantCount = formData.has_variants ? generatedVariants.filter(v => v.enabled).length : 0
-    const productSlug = formData.slug || generateSlug(formData.name)
     const sku = formData.sku.trim() || null
     
     // Generate a folder name - use SKU if available, otherwise use slug
@@ -1899,13 +2006,29 @@ export default function ProductsPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}slug`}>Slug</Label>
+            <Label htmlFor={`${idPrefix}slug`}>Slug *</Label>
             <Input
               id={`${idPrefix}slug`}
               placeholder="e.g. classic-t-shirt"
               value={formData.slug}
-              onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+              onChange={(e) => handleProductSlugChange(e.target.value)}
+              onBlur={async () => {
+                if (formData.slug.trim()) {
+                  const excludeId = isEditDialogOpen ? selectedProduct?.id : undefined
+                  const exists = await checkProductSlugExists(formData.slug, excludeId)
+                  if (exists) {
+                    setSlugError("Slug already exists")
+                  }
+                } else {
+                  setSlugError("Slug is required")
+                }
+              }}
+              className={slugError ? "border-red-500 focus-visible:ring-red-500" : ""}
+              required
             />
+            {slugError && (
+              <p className="text-sm text-red-500">{slugError}</p>
+            )}
           </div>
         </div>
 
@@ -2193,11 +2316,11 @@ export default function ProductsPage() {
                 Cancel
               </Button>
               {(!formData.has_variants || wizardStep === maxSteps) ? (
-                <Button size="sm" onClick={handleSaveProduct} disabled={saving || !formData.name.trim()}>
+                <Button size="sm" onClick={handleSaveProduct} disabled={saving || !formData.name.trim() || !formData.slug.trim() || !!slugError}>
                   {saving ? "Creating..." : "Create Product"}
                 </Button>
               ) : (
-                <Button size="sm" onClick={nextStep}>
+                <Button size="sm" onClick={nextStep} disabled={!formData.slug.trim() || !!slugError}>
                   Next
                   <CaretRight />
                 </Button>
@@ -2264,11 +2387,11 @@ export default function ProductsPage() {
                 Cancel
               </Button>
               {(!formData.has_variants || editWizardStep === editMaxSteps) ? (
-                <Button size="sm" onClick={handleEditProduct} disabled={saving || !formData.name.trim()}>
+                <Button size="sm" onClick={handleEditProduct} disabled={saving || !formData.name.trim() || !formData.slug.trim() || !!slugError}>
                   {saving ? "Saving..." : "Save Changes"}
                 </Button>
               ) : (
-                <Button size="sm" onClick={nextEditStep}>
+                <Button size="sm" onClick={nextEditStep} disabled={!formData.slug.trim() || !!slugError}>
                   Next
                   <CaretRight />
                 </Button>

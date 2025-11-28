@@ -109,7 +109,6 @@ export default function CategoriesPage() {
   const [imagePreview, setImagePreview] = useState<string>("")
   const [uploadingImage, setUploadingImage] = useState(false)
   const [slugError, setSlugError] = useState<string>("")
-  const [checkingSlug, setCheckingSlug] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -214,16 +213,25 @@ export default function CategoriesPage() {
       .replace(/(^-|-$)/g, "")
   }
 
-  function handleNameChange(name: string) {
+  async function handleNameChange(name: string) {
     const newSlug = generateSlug(name)
     setFormData({
       ...formData,
       name,
       slug: newSlug
     })
-    // Clear error when name changes (slug will be regenerated)
-    if (slugError) {
-      setSlugError("")
+    
+    // Clear error first
+    setSlugError("")
+    
+    // Validate the auto-generated slug if it's not empty
+    if (newSlug.trim() && store) {
+      const excludeId = isEditDialogOpen ? selectedCategory?.id : undefined
+      const exists = await checkSlugExists(newSlug, excludeId)
+      
+      if (exists) {
+        setSlugError("Slug already exists")
+      }
     }
   }
 
@@ -231,7 +239,6 @@ export default function CategoriesPage() {
   async function checkSlugExists(slug: string, excludeId?: string): Promise<boolean> {
     if (!store || !slug.trim()) return false
 
-    setCheckingSlug(true)
     try {
       let query = supabase
         .from("categories")
@@ -254,8 +261,6 @@ export default function CategoriesPage() {
     } catch (error) {
       console.error("Error checking slug:", error)
       return false
-    } finally {
-      setCheckingSlug(false)
     }
   }
 
@@ -516,7 +521,8 @@ export default function CategoriesPage() {
         } else {
           // Between previous sibling and target
           const prevSibling = siblings[targetIndex - 1]
-          newSortOrder = ((prevSibling.sort_order || 0) + (targetCategory.sort_order || 0)) / 2
+          const calculated = ((prevSibling.sort_order || 0) + (targetCategory.sort_order || 0)) / 2
+          newSortOrder = Math.round(calculated) || (targetCategory.sort_order || 0) - 5
         }
       } else { // below
         if (targetIndex === -1 || targetIndex >= siblings.length - 1) {
@@ -525,9 +531,13 @@ export default function CategoriesPage() {
         } else {
           // Between target and next sibling
           const nextSibling = siblings[targetIndex + 1]
-          newSortOrder = ((targetCategory.sort_order || 0) + (nextSibling.sort_order || 0)) / 2
+          const calculated = ((targetCategory.sort_order || 0) + (nextSibling.sort_order || 0)) / 2
+          newSortOrder = Math.round(calculated) || (targetCategory.sort_order || 0) + 5
         }
       }
+      
+      // Ensure sort_order is always an integer
+      newSortOrder = Math.round(newSortOrder)
       
       console.log("New sort order:", newSortOrder)
     }
@@ -542,7 +552,9 @@ export default function CategoriesPage() {
 
     if (error) {
       console.error("Error moving category:", error)
-      toast.error("Failed to move category")
+      toast.error(`Failed to move category: ${error.message || 'Unknown error'}`)
+      handleDragEnd()
+      return
     } else {
       if (currentDropPosition === "inside") {
         setExpandedCategories(prev => new Set([...prev, targetCategory.id]))
@@ -583,7 +595,9 @@ export default function CategoriesPage() {
 
     if (error) {
       console.error("Error moving category:", error)
-      toast.error("Failed to move category")
+      toast.error(`Failed to move category: ${error.message || 'Unknown error'}`)
+      handleDragEnd()
+      return
     } else {
       toast.success(`Moved "${dragged.name}" to root level`)
       await fetchData()
@@ -1137,13 +1151,9 @@ export default function CategoriesPage() {
                   }
                 }}
                 className={slugError ? "border-red-500 focus-visible:ring-red-500" : ""}
-                disabled={checkingSlug}
               />
               {slugError && (
                 <p className="text-sm text-red-500">{slugError}</p>
-              )}
-              {checkingSlug && (
-                <p className="text-sm text-muted-foreground">Checking slug...</p>
               )}
             </div>
             <div className="space-y-2">
@@ -1288,13 +1298,9 @@ export default function CategoriesPage() {
                   }
                 }}
                 className={slugError ? "border-red-500 focus-visible:ring-red-500" : ""}
-                disabled={checkingSlug}
               />
               {slugError && (
                 <p className="text-sm text-red-500">{slugError}</p>
-              )}
-              {checkingSlug && (
-                <p className="text-sm text-muted-foreground">Checking slug...</p>
               )}
             </div>
             <div className="space-y-2">
