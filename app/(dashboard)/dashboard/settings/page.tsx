@@ -1168,7 +1168,8 @@ function SettingsPageContent() {
       toast.success("Pages saved successfully")
     } catch (error: any) {
       console.error("Error saving pages:", error)
-      toast.error("Failed to save pages")
+      const errorMessage = error?.message || "Failed to save pages"
+      toast.error(`Failed to save pages: ${errorMessage}`)
     } finally {
       setSavingPages(false)
     }

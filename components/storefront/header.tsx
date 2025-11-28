@@ -4,6 +4,7 @@
 import { useState, useRef, useEffect } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import Script from "next/script"
 import { 
   MagnifyingGlass, 
@@ -214,12 +215,39 @@ export function StorefrontHeader({
   currentCategorySlug
 }: StorefrontHeaderProps) {
   const { itemCount } = useCart()
-  const { getUrl } = useStorefrontUrl(username)
+  const { getUrl, isCustomDomain } = useStorefrontUrl(username)
+  const pathname = usePathname()
   const themeColor = store.theme_color || "#000000"
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Build tree structure - only show root categories in nav
   const categoryTree = buildCategoryTree(categories)
+
+  // Check if we're on the home page
+  const homeUrl = getUrl()
+  // Normalize paths (remove trailing slashes for comparison)
+  const normalizedPathname = pathname.replace(/\/$/, '') || '/'
+  const normalizedHomeUrl = homeUrl.replace(/\/$/, '') || '/'
+  const isHomePage = normalizedPathname === normalizedHomeUrl || normalizedPathname === `/${username}`
+
+  // Logo content (reusable)
+  const logoContent = (
+    <>
+      {store.logo_url ? (
+        <img src={store.logo_url} alt={store.name} className="h-8 sm:h-10 w-auto" />
+      ) : (
+        <div className="flex items-center gap-2">
+          <div 
+            className="h-6 w-6 sm:h-8 sm:w-8 rounded flex items-center justify-center text-white font-bold text-sm sm:text-base"
+            style={{ backgroundColor: themeColor }}
+          >
+            {store.name.charAt(0)}
+          </div>
+          <span className="font-bold text-base sm:text-xl tracking-tight hidden sm:inline">{store.name}</span>
+        </div>
+      )}
+    </>
+  )
 
   return (
     <>
@@ -238,21 +266,19 @@ export function StorefrontHeader({
           <div className="flex items-center h-16 gap-2 sm:gap-4">
             {/* Logo - Most Left */}
             <div className="shrink-0">
-              <Link href={getUrl()} className="flex items-center gap-2 shrink-0">
-                {store.logo_url ? (
-                  <img src={store.logo_url} alt={store.name} className="h-8 sm:h-10 w-auto" />
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="h-6 w-6 sm:h-8 sm:w-8 rounded flex items-center justify-center text-white font-bold text-sm sm:text-base"
-                      style={{ backgroundColor: themeColor }}
-                    >
-                      {store.name.charAt(0)}
-                    </div>
-                    <span className="font-bold text-base sm:text-xl tracking-tight hidden sm:inline">{store.name}</span>
-                  </div>
-                )}
-              </Link>
+              {isHomePage ? (
+                <button
+                  onClick={() => window.location.reload()}
+                  className="flex items-center gap-2 shrink-0 cursor-pointer"
+                  aria-label="Reload page"
+                >
+                  {logoContent}
+                </button>
+              ) : (
+                <Link href={getUrl()} className="flex items-center gap-2 shrink-0">
+                  {logoContent}
+                </Link>
+              )}
             </div>
 
             {/* Search - Center */}
@@ -290,7 +316,7 @@ export function StorefrontHeader({
                     className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
                     title="Call us"
                   >
-                    <Phone className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <Phone className="h-6 w-6 sm:h-7 sm:w-7" />
                   </a>
                 )}
                 <Link 
@@ -298,7 +324,7 @@ export function StorefrontHeader({
                   className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors relative"
                   title="Cart"
                 >
-                  <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <ShoppingCart className="h-6 w-6 sm:h-7 sm:w-7" />
                   {itemCount > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center text-[10px] sm:text-xs font-bold text-white bg-red-500 rounded-full">
                       {itemCount > 99 ? '99+' : itemCount}
@@ -310,7 +336,7 @@ export function StorefrontHeader({
                   className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
                   title="Account"
                 >
-                  <User className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <User className="h-6 w-6 sm:h-7 sm:w-7" />
                 </Link>
             </div>
           </div>

@@ -7,6 +7,7 @@ import { notFound, useParams } from "next/navigation"
 import { StorefrontHeader } from "@/components/storefront/header"
 import { StorefrontFooter } from "@/components/storefront/footer"
 import { FloatingButtons } from "@/components/storefront/floating-buttons"
+import { LoadingSpinner } from "@/components/storefront/loading-spinner"
 import { useStorefrontUrl } from "@/lib/use-storefront-url"
 import { useStoreMeta } from "@/lib/use-store-meta"
 import { CartProvider } from "@/lib/cart-context"
@@ -209,11 +210,7 @@ function PageContent() {
   }, [username, pageSlug])
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-pulse text-gray-500">Loading...</div>
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
   if (!store || !page) {

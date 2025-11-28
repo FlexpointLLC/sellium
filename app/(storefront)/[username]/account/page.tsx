@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { StorefrontHeader } from "@/components/storefront/header"
 import { StorefrontFooter } from "@/components/storefront/footer"
 import { FloatingButtons } from "@/components/storefront/floating-buttons"
+import { LoadingSpinner } from "@/components/storefront/loading-spinner"
 import { CartProvider } from "@/lib/cart-context"
 import { useStorefrontUrl } from "@/lib/use-storefront-url"
 import { useStoreMeta } from "@/lib/use-store-meta"
@@ -165,11 +166,7 @@ function AccountPageContent({ params }: { params: { username: string } }) {
   useStoreMeta(store)
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="animate-pulse text-gray-500">Loading...</div>
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
   if (error || !store) {
@@ -206,7 +203,7 @@ function AccountPageContent({ params }: { params: { username: string } }) {
               Your marketplace.
             </h1>
             <p className="text-3xl text-gray-600 tracking-tight">
-              Log in to your Sellium account
+              Track orders, Favourites & Tickets
             </p>
           </div>
 

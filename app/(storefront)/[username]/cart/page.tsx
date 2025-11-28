@@ -17,6 +17,7 @@ import { CartProvider, useCart } from "@/lib/cart-context"
 import { StorefrontHeader } from "@/components/storefront/header"
 import { StorefrontFooter } from "@/components/storefront/footer"
 import { FloatingButtons } from "@/components/storefront/floating-buttons"
+import { LoadingSpinner } from "@/components/storefront/loading-spinner"
 import { useStorefrontUrl } from "@/lib/use-storefront-url"
 import { useStoreMeta } from "@/lib/use-store-meta"
 
@@ -151,11 +152,7 @@ function CartContent({ params }: { params: { username: string } }) {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="animate-pulse text-gray-500">Loading...</div>
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
   if (error || !store) {

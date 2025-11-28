@@ -23,6 +23,7 @@ import { CartProvider, useCart } from "@/lib/cart-context"
 import { toast } from "sonner"
 import { StorefrontHeader } from "@/components/storefront/header"
 import { StorefrontFooter } from "@/components/storefront/footer"
+import { LoadingSpinner } from "@/components/storefront/loading-spinner"
 import { useStorefrontUrl } from "@/lib/use-storefront-url"
 import { useStoreMeta } from "@/lib/use-store-meta"
 
@@ -535,11 +536,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="animate-pulse text-gray-500">Loading...</div>
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
   if (error || !store) {

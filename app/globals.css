@@ -159,5 +159,22 @@
   .scrollbar-visible::-webkit-scrollbar-corner {
     background: hsl(var(--muted) / 0.4);
   }
+
+  /* Loading progress bar animation */
+  @keyframes loading-progress {
+    0% {
+      transform: translateX(-100%);
+    }
+    50% {
+      transform: translateX(0%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  .animate-loading-progress {
+    animation: loading-progress 1.5s ease-in-out infinite;
+  }
 }
 
