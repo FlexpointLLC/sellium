@@ -376,9 +376,6 @@ function SettingsPageContent() {
       card: false,
       cod: true
     },
-    payout_method: "bkash",
-    payout_account_number: "",
-    payout_account_holder: "",
     // Merchant information
     bkash: {
       mode: "manual", // "manual" or "api"
@@ -573,9 +570,6 @@ function SettingsPageContent() {
             card: false,
             cod: true
           },
-          payout_method: paymentData.payout_method || "bkash",
-          payout_account_number: paymentData.payout_account_number || "",
-          payout_account_holder: paymentData.payout_account_holder || "",
           bkash: {
             mode: paymentData.bkash?.mode || "manual",
             base_url: paymentData.bkash?.base_url || "",
@@ -4279,60 +4273,6 @@ function SettingsPageContent() {
                         }
                       />
                     </div>
-                  </div>
-                </div>
-
-                {/* Payout Settings */}
-                <div className="space-y-4 pt-4 border-t border-border/50">
-                  <h3 className="text-sm font-medium">Payout Settings</h3>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Payout Method</Label>
-                      <Select 
-                        value={paymentSettings.payout_method}
-                        onValueChange={(value) => 
-                          setPaymentSettings({
-                            ...paymentSettings,
-                            payout_method: value
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bkash">bKash</SelectItem>
-                          <SelectItem value="nagad">Nagad</SelectItem>
-                          <SelectItem value="bank">Bank Transfer</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Account Number</Label>
-                      <Input 
-                        placeholder="01XXXXXXXXX" 
-                        value={paymentSettings.payout_account_number}
-                        onChange={(e) => 
-                          setPaymentSettings({
-                            ...paymentSettings,
-                            payout_account_number: e.target.value
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Account Holder Name</Label>
-                    <Input 
-                      placeholder="Your full name" 
-                      value={paymentSettings.payout_account_holder}
-                      onChange={(e) => 
-                        setPaymentSettings({
-                          ...paymentSettings,
-                          payout_account_holder: e.target.value
-                        })
-                      }
-                    />
                   </div>
                 </div>
 

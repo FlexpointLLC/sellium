@@ -48,6 +48,7 @@ interface SupportTicket {
   priority: "low" | "medium" | "high" | "urgent"
   status: "open" | "in_progress" | "resolved" | "closed"
   category: string | null
+  customer_email: string | null
   admin_response: string | null
   created_at: string
   updated_at: string
@@ -446,9 +447,10 @@ export default function SupportPage() {
         <div className="border-b border-border/50 px-6 py-4">
           <h2 className="text-lg font-semibold">Your Tickets</h2>
         </div>
-        <div className="grid grid-cols-5 gap-4 border-b border-border/50 px-6 py-3 text-sm font-medium text-muted-foreground">
+        <div className="grid grid-cols-6 gap-4 border-b border-border/50 px-6 py-3 text-sm font-medium text-muted-foreground">
           <div>Ticket ID</div>
           <div>Subject</div>
+          <div>Customer Email</div>
           <div>Status</div>
           <div>Priority</div>
           <div>Last Updated</div>
@@ -461,7 +463,7 @@ export default function SupportPage() {
           tickets.map((ticket) => (
             <div
               key={ticket.id}
-              className="grid grid-cols-5 gap-4 border-b border-border/50 px-6 py-4 last:border-0 hover:bg-muted/50"
+              className="grid grid-cols-6 gap-4 border-b border-border/50 px-6 py-4 last:border-0 hover:bg-muted/50"
             >
               <div 
                 className="flex items-center gap-3 cursor-pointer"
@@ -477,6 +479,12 @@ export default function SupportPage() {
                 onClick={() => handleViewTicket(ticket)}
               >
                 {ticket.subject}
+              </div>
+              <div 
+                className="flex items-center text-muted-foreground cursor-pointer"
+                onClick={() => handleViewTicket(ticket)}
+              >
+                {ticket.customer_email || "-"}
               </div>
               <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
                 <Select
@@ -710,6 +718,12 @@ export default function SupportPage() {
                 <div>
                   <Label className="text-xs text-muted-foreground">Category</Label>
                   <p className="mt-1 text-sm">{selectedTicket.category}</p>
+                </div>
+              )}
+              {selectedTicket.customer_email && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Customer Email</Label>
+                  <p className="mt-1 text-sm">{selectedTicket.customer_email}</p>
                 </div>
               )}
               <div>

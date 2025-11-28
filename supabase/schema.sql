@@ -193,6 +193,14 @@ BEGIN
   END IF;
 END $$;
 
+-- Add customer_email to support_tickets
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'support_tickets' AND column_name = 'customer_email') THEN
+    ALTER TABLE public.support_tickets ADD COLUMN customer_email TEXT;
+  END IF;
+END $$;
+
 -- Add missing columns to customers
 DO $$ 
 BEGIN
@@ -681,6 +689,7 @@ CREATE TABLE IF NOT EXISTS public.support_tickets (
   priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
   status TEXT DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
   category TEXT,
+  customer_email TEXT,
   attachments TEXT[] DEFAULT '{}',
   admin_response TEXT,
   resolved_at TIMESTAMP WITH TIME ZONE,
