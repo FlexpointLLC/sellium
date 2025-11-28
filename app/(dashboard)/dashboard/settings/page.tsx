@@ -26,6 +26,7 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { UpgradeDialog } from "@/components/upgrade-dialog"
+import { useStore } from "@/lib/store-context"
 
 type TabType = "store" | "profile" | "team" | "domain" | "notifications" | "payments" | "security" | "pages" | "billing"
 
@@ -65,6 +66,7 @@ function SettingsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
+  const { currentStore } = useStore()
   
   // Get initial tab from URL or default to "store"
   const tabFromUrl = searchParams.get("tab") as TabType | null
@@ -74,7 +76,7 @@ function SettingsPageContent() {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [storeId, setStoreId] = useState<string | null>(null)
+  const storeId = currentStore?.store_id || null
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
   const [upgradeRequests, setUpgradeRequests] = useState<any[]>([])
   const [cancelSubscriptionDialogOpen, setCancelSubscriptionDialogOpen] = useState(false)
@@ -473,9 +475,11 @@ function SettingsPageContent() {
   }
 
   useEffect(() => {
-    fetchData()
+    if (currentStore) {
+      fetchData()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [currentStore])
 
   useEffect(() => {
     if (activeTab === "team" && storeId) {
@@ -487,7 +491,19 @@ function SettingsPageContent() {
     if (storeId) {
       fetchUpgradeRequests()
     }
-  }, [storeId])
+  }, [storeId, activeTab])
+  
+  // Fetch team members when tab changes to team (ensure it runs even if storeId was set before)
+  useEffect(() => {
+    if (activeTab === "team" && storeId) {
+      // Small delay to ensure state is settled
+      const timer = setTimeout(() => {
+        fetchTeamMembers()
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, storeId])
 
   async function fetchData() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -514,15 +530,19 @@ function SettingsPageContent() {
       })
     }
 
-    // Fetch store
+    // Fetch store using current store from context
+    if (!currentStore) {
+      setLoading(false)
+      return
+    }
+
     const { data: storeData } = await supabase
       .from("stores")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("id", currentStore.store_id)
       .single()
 
     if (storeData) {
-      setStoreId(storeData.id)
       setStore({
         name: storeData.name || "",
         username: storeData.username || "",
@@ -794,6 +814,12 @@ function SettingsPageContent() {
       return
     }
 
+    // Only owners can invite team members
+    if (currentStore?.role !== 'owner') {
+      toast.error("Only store owners can invite team members")
+      return
+    }
+
     setInviting(true)
     const { data: { user } } = await supabase.auth.getUser()
     
@@ -802,15 +828,48 @@ function SettingsPageContent() {
       return
     }
 
-    // Check if user exists
-    const { data: existingUser } = await supabase
+    // Check if user exists - try profiles first, then auth.users via function
+    const normalizedEmail = inviteEmail.trim().toLowerCase()
+    let existingUser: { id: string } | null = null
+    
+    // First, try to find in profiles table (case-insensitive)
+    const { data: profileUser } = await supabase
       .from("profiles")
       .select("id")
-      .eq("email", inviteEmail.trim())
-      .single()
+      .ilike("email", normalizedEmail)
+      .maybeSingle()
 
-    if (!existingUser) {
-      toast.error("User with this email does not exist. They need to sign up first.")
+    if (profileUser) {
+      existingUser = profileUser
+    } else {
+      // If not in profiles, try to find via database function that checks auth.users
+      const { data: authUser, error: functionError } = await supabase
+        .rpc('find_user_by_email', { search_email: normalizedEmail })
+
+      if (authUser && authUser.length > 0) {
+        // User exists in auth.users, now get or create their profile
+        const userId = authUser[0].id
+        
+        // Check if profile exists (it might not have email field populated)
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", userId)
+          .maybeSingle()
+
+        if (existingProfile) {
+          existingUser = { id: userId }
+        } else {
+          // Profile doesn't exist, which shouldn't happen, but handle it
+          toast.error("User account exists but profile is missing. Please contact support.")
+          setInviting(false)
+          return
+        }
+      }
+    }
+
+    if (!existingUser || !existingUser.id) {
+      toast.error("User with this email not found. They need to sign up first.")
       setInviting(false)
       return
     }
@@ -856,6 +915,12 @@ function SettingsPageContent() {
   // Update team member role
   async function handleUpdateMemberRole(memberId: string, newRole: "owner" | "agent" | "rider") {
     if (!storeId) return
+
+    // Only owners can update member roles
+    if (currentStore?.role !== 'owner') {
+      toast.error("Only store owners can update member roles")
+      return
+    }
 
     // If it's the owner, we can't change their role
     if (memberId === "owner") {
@@ -2676,7 +2741,8 @@ function SettingsPageContent() {
               </div>
 
               <div className="space-y-6">
-                {/* Invite Team Member */}
+                {/* Invite Team Member - Only for owners */}
+                {currentStore?.role === 'owner' && (
                 <div className="rounded-lg border border-border/50 bg-muted/30 p-4">
                   <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
                     <UserPlus className="h-4 w-4" />
@@ -2716,6 +2782,7 @@ function SettingsPageContent() {
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Team Members List */}
                 <div>

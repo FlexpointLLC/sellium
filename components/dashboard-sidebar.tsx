@@ -39,6 +39,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { UpgradeDialog } from "@/components/upgrade-dialog"
 import { UserDropdown } from "@/components/user-dropdown"
+import { useStore } from "@/lib/store-context"
 
 const menuGroups = [
   {
@@ -149,17 +150,18 @@ export function DashboardSidebar() {
   const router = useRouter()
   const supabase = createClient()
   const { state } = useSidebar()
+  const { currentStore, loading: storeLoading } = useStore()
   
-  const [storePlan, setStorePlan] = useState<string | null>(null)
-  const [storeId, setStoreId] = useState<string | null>(null)
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false) // Track if user is platform admin
   const [loading, setLoading] = useState(true)
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
   const [expiredSubscriptionsCount, setExpiredSubscriptionsCount] = useState(0)
   
   const isCollapsed = state === "collapsed"
 
+  // Get role from current store context, fallback to profile role for admin
   useEffect(() => {
     async function fetchUserData() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -169,27 +171,23 @@ export function DashboardSidebar() {
         return
       }
 
-      // Fetch profile for role
+      // Fetch profile for admin role check
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
         .eq("id", user.id)
         .single()
 
-      if (profile) {
+      // Check if user is platform admin
+      const userIsAdmin = profile?.role === 'admin'
+      setIsAdmin(userIsAdmin || false)
+
+      // Use current store role if available, otherwise use profile role
+      // But always preserve admin status for menu visibility
+      if (currentStore) {
+        setUserRole(currentStore.role)
+      } else if (profile) {
         setUserRole(profile.role || 'owner')
-      }
-
-      // Fetch store plan and id
-      const { data: store } = await supabase
-        .from("stores")
-        .select("id, plan")
-        .eq("user_id", user.id)
-        .single()
-
-      if (store) {
-        setStorePlan(store.plan || "free")
-        setStoreId(store.id)
       }
 
       // Fetch pending upgrade requests count and expired subscriptions count for admin users
@@ -222,7 +220,7 @@ export function DashboardSidebar() {
     }
 
     fetchUserData()
-  }, [supabase])
+  }, [supabase, currentStore])
 
   // Set up polling for pending requests count and expired subscriptions (only for admin)
   useEffect(() => {
@@ -266,9 +264,9 @@ export function DashboardSidebar() {
       <SidebarContent>
         {menuGroups
           .filter((group) => {
-            // Hide Admin section by default - only show for admin users
+            // Hide Admin section by default - only show for platform admin users
             if (group.label === 'Admin') {
-              return userRole === 'admin'
+              return isAdmin
             }
             
             // Filter menu groups based on role
@@ -357,7 +355,7 @@ export function DashboardSidebar() {
       </SidebarContent>
       <SidebarFooter className="p-2 space-y-2">
         {/* Upgrade Banner for Free Plan */}
-        {storePlan === 'free' && !isCollapsed && (
+        {currentStore && currentStore.store.plan === 'free' && !isCollapsed && (
           <div className="mx-2 mb-2 p-4 rounded-xl border border-orange-300 bg-orange-50 dark:bg-orange-950/20">
             <div className="flex flex-col items-center text-center gap-3">
               {/* Crown Icon Container */}
@@ -382,12 +380,12 @@ export function DashboardSidebar() {
       </SidebarFooter>
       
       {/* Upgrade Dialog */}
-      {storeId && storePlan && (
+      {currentStore && (
         <UpgradeDialog
           open={upgradeDialogOpen}
           onOpenChange={setUpgradeDialogOpen}
-          currentPlan={storePlan as 'free' | 'paid' | 'pro'}
-          storeId={storeId}
+          currentPlan={currentStore.store.plan as 'free' | 'paid' | 'pro'}
+          storeId={currentStore.store_id}
         />
       )}
     </Sidebar>

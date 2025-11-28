@@ -1,64 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { useStore } from "@/lib/store-context"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { CaretDown } from "phosphor-react"
+import { CaretDown, Check } from "phosphor-react"
 
 export function UserDropdown() {
-  const supabase = createClient()
-  const [storeData, setStoreData] = useState<{
-    name: string | null
-    logo_url: string | null
-  } | null>(null)
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { currentStore, stores, loading, switchStore } = useStore()
 
-  useEffect(() => {
-    async function fetchData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) {
-        setLoading(false)
-        return
-      }
-
-      // Fetch profile for role
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single()
-
-      if (profile) {
-        setUserRole(profile.role || 'owner')
-      }
-
-      // Fetch store data
-      const { data: store } = await supabase
-        .from("stores")
-        .select("name, logo_url")
-        .eq("user_id", user.id)
-        .single()
-
-      if (store) {
-        setStoreData({
-          name: store.name,
-          logo_url: store.logo_url,
-        })
-      }
-
-      setLoading(false)
-    }
-
-    fetchData()
-  }, [supabase])
-
-  const getRoleLabel = (role: string | null): string => {
+  const getRoleLabel = (role: string): string => {
     switch (role) {
       case 'admin':
         return 'Admin'
@@ -87,61 +42,113 @@ export function UserDropdown() {
     return parts[0][0].toUpperCase()
   }
 
-  if (loading) {
+  if (loading || !currentStore) {
     return (
-      <div className="h-9 w-32 bg-muted animate-pulse rounded-lg" />
+      <div className="h-9 w-full bg-muted animate-pulse rounded-lg" />
     )
+  }
+
+  const handleStoreSwitch = async (storeId: string) => {
+    if (storeId !== currentStore.store_id) {
+      await switchStore(storeId)
+    }
   }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg bg-muted/15 hover:bg-muted transition-colors group`}>
-          {storeData?.logo_url ? (
+          {currentStore.store.logo_url ? (
             <img 
-              src={storeData.logo_url} 
-              alt={storeData.name || "Store"} 
+              src={currentStore.store.logo_url} 
+              alt={currentStore.store.name || "Store"} 
               className="h-10 w-10 rounded object-cover flex-shrink-0"
             />
           ) : (
             <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-xs font-semibold flex-shrink-0">
-              {getInitials(storeData?.name || null)}
+              {getInitials(currentStore.store.name || null)}
             </div>
           )}
           <div className="flex-1 text-left min-w-0">
             <div className="font-medium text-sm truncate">
-              {storeData?.name || "Store"}
+              {currentStore.store.name || "Store"}
             </div>
             <div className="text-xs text-muted-foreground truncate mt-0.5">
-              {getRoleLabel(userRole)}
+              {getRoleLabel(currentStore.role)}
             </div>
           </div>
           <CaretDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64 p-0 ml-2 border-0 bg-gray-50 dark:bg-gray-900 shadow-lg">
-        <div className="px-4 py-3">
+      <DropdownMenuContent align="end" className="w-72 p-0 ml-2 border-0 bg-gray-50 dark:bg-gray-900 shadow-lg">
+        <div className="px-4 py-3 border-b border-border">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+            Switch Organization
+          </div>
           <div className="flex items-center gap-3">
-            {storeData?.logo_url ? (
+            {currentStore.store.logo_url ? (
               <img 
-                src={storeData.logo_url} 
-                alt={storeData.name || "Store"} 
+                src={currentStore.store.logo_url} 
+                alt={currentStore.store.name || "Store"} 
                 className="h-10 w-10 rounded object-cover flex-shrink-0"
               />
             ) : (
               <div className="h-10 w-10 rounded bg-muted flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                {getInitials(storeData?.name || null)}
+                {getInitials(currentStore.store.name || null)}
               </div>
             )}
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-sm truncate">
-                {storeData?.name || "Store"}
+                {currentStore.store.name || "Store"}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                {getRoleLabel(userRole)}
+                {getRoleLabel(currentStore.role)}
               </div>
             </div>
+            <Check className="h-4 w-4 text-primary flex-shrink-0" />
           </div>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto">
+          {stores.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-muted-foreground text-center">
+              No organizations found
+            </div>
+          ) : (
+            // Deduplicate by store_id and filter out current store (it's already shown in header)
+            Array.from(
+              new Map(stores.map((store) => [store.store_id, store])).values()
+            )
+            .filter((store) => store.store_id !== currentStore.store_id)
+            .map((store) => (
+              <DropdownMenuItem
+                key={store.store_id}
+                onClick={() => handleStoreSwitch(store.store_id)}
+                className="px-4 py-3 cursor-pointer hover:bg-muted/50 focus:bg-muted/50"
+              >
+                <div className="flex items-center gap-3 w-full">
+                  {store.store.logo_url ? (
+                    <img 
+                      src={store.store.logo_url} 
+                      alt={store.store.name || "Store"} 
+                      className="h-8 w-8 rounded object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                      {getInitials(store.store.name || null)}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">
+                      {store.store.name || "Store"}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate mt-0.5">
+                      {getRoleLabel(store.role)}
+                    </div>
+                  </div>
+                </div>
+              </DropdownMenuItem>
+            ))
+          )}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>
