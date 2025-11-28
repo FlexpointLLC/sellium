@@ -100,19 +100,32 @@ export function StorefrontFooter({ store, categories = [], username }: Storefron
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Store Info */}
           <div className="md:col-span-1">
-            {store.logo_url ? (
-              <img src={store.logo_url} alt={store.name} className="h-10 w-auto mb-4" />
-            ) : (
-              <div className="flex items-center gap-2 mb-4">
-                <div 
-                  className="h-8 w-8 rounded flex items-center justify-center text-white font-bold"
-                  style={{ backgroundColor: themeColor }}
-                >
-                  {store.name.charAt(0)}
+            {(() => {
+              const getStoreInitials = (name: string): string => {
+                const parts = name.trim().split(" ").filter(part => part.length > 0)
+                if (parts.length >= 2) {
+                  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+                }
+                if (parts[0].length >= 2) {
+                  return parts[0].substring(0, 2).toUpperCase()
+                }
+                return parts[0][0].toUpperCase()
+              }
+
+              return store.logo_url ? (
+                <img src={store.logo_url} alt={store.name} className="h-10 w-auto mb-4" />
+              ) : (
+                <div className="flex items-center gap-2 mb-4">
+                  <div 
+                    className="h-8 w-8 rounded flex items-center justify-center text-white font-bold"
+                    style={{ backgroundColor: themeColor }}
+                  >
+                    {getStoreInitials(store.name)}
+                  </div>
+                  <span className="font-bold text-lg">{store.name}</span>
                 </div>
-                <span className="font-bold text-lg">{store.name}</span>
-              </div>
-            )}
+              )
+            })()}
             {store.social_links?.phone && (
               <p className="text-sm text-gray-600 mb-2">
                 <Phone className="inline h-4 w-4 mr-2" />

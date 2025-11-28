@@ -230,6 +230,20 @@ export function StorefrontHeader({
   const normalizedHomeUrl = homeUrl.replace(/\/$/, '') || '/'
   const isHomePage = normalizedPathname === normalizedHomeUrl || normalizedPathname === `/${username}`
 
+  // Get initials from store name
+  const getStoreInitials = (name: string): string => {
+    const parts = name.trim().split(" ").filter(part => part.length > 0)
+    if (parts.length >= 2) {
+      // First letter of first word and first letter of last word
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    }
+    // If only one word, show first two letters if available, otherwise just first letter
+    if (parts[0].length >= 2) {
+      return parts[0].substring(0, 2).toUpperCase()
+    }
+    return parts[0][0].toUpperCase()
+  }
+
   // Logo content (reusable)
   const logoContent = (
     <>
@@ -241,7 +255,7 @@ export function StorefrontHeader({
             className="h-6 w-6 sm:h-8 sm:w-8 rounded flex items-center justify-center text-white font-bold text-sm sm:text-base"
             style={{ backgroundColor: themeColor }}
           >
-            {store.name.charAt(0)}
+            {getStoreInitials(store.name)}
           </div>
           <span className="font-bold text-base sm:text-xl tracking-tight hidden sm:inline">{store.name}</span>
         </div>
