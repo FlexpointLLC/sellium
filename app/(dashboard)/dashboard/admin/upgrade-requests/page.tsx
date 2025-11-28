@@ -246,7 +246,7 @@ function AdminUpgradeRequestsPageContent() {
 
   async function handleCancelExpiredSubscription(storeId: string) {
     try {
-      const freeLimits = { traffic: 2000, products: 100 }
+      const freeLimits = { traffic: 2000, products: 100, orders: 500 }
 
       const { error } = await supabase
         .from("stores")
@@ -254,6 +254,7 @@ function AdminUpgradeRequestsPageContent() {
           plan: 'free',
           traffic_limit: freeLimits.traffic,
           product_limit: freeLimits.products,
+          order_limit: freeLimits.orders,
           subscription_expires_at: null,
           updated_at: new Date().toISOString()
         })
@@ -292,9 +293,9 @@ function AdminUpgradeRequestsPageContent() {
       }
 
       // Define plan limits
-      const planLimits: Record<string, { traffic: number; products: number }> = {
-        paid: { traffic: 50000, products: 1000 },
-        pro: { traffic: 999999999, products: 10000 }
+      const planLimits: Record<string, { traffic: number; products: number; orders: number | null }> = {
+        paid: { traffic: 50000, products: 1000, orders: 5000 },
+        pro: { traffic: 999999999, products: 10000, orders: null }
       }
 
       const limits = planLimits[renewalPlan] || planLimits.paid
@@ -306,6 +307,7 @@ function AdminUpgradeRequestsPageContent() {
           subscription_expires_at: expiresAt.toISOString(),
           traffic_limit: limits.traffic,
           product_limit: limits.products,
+          order_limit: limits.orders,
           updated_at: new Date().toISOString()
         })
         .eq("id", selectedStoreForRenewal.storeId)
@@ -369,10 +371,10 @@ function AdminUpgradeRequestsPageContent() {
         }
 
         // Define plan limits
-        const planLimits: Record<string, { traffic: number; products: number }> = {
-          free: { traffic: 2000, products: 100 },
-          paid: { traffic: 50000, products: 1000 },
-          pro: { traffic: 999999999, products: 10000 } // Very high number for "unlimited"
+        const planLimits: Record<string, { traffic: number; products: number; orders: number | null }> = {
+          free: { traffic: 2000, products: 100, orders: 500 },
+          paid: { traffic: 50000, products: 1000, orders: 5000 },
+          pro: { traffic: 999999999, products: 10000, orders: null } // null means unlimited
         }
 
         const limits = planLimits[requestedPlan] || planLimits.free
@@ -383,6 +385,7 @@ function AdminUpgradeRequestsPageContent() {
             plan: requestedPlan,
             traffic_limit: limits.traffic,
             product_limit: limits.products,
+            order_limit: limits.orders,
             subscription_expires_at: expiresAt.toISOString(),
             updated_at: new Date().toISOString()
           })

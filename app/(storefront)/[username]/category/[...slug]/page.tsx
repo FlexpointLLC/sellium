@@ -529,6 +529,7 @@ function CategoryContent({
         themeColor={themeColor}
         currency={store.currency}
         username={params.username}
+        getUrl={getUrl}
       />
     </div>
   )

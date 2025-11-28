@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Define free plan limits
-    const freeLimits = { traffic: 2000, products: 100 }
+    const freeLimits = { traffic: 2000, products: 100, orders: 500 }
 
     // Update all expired stores to free plan
     const storeIds = expiredStores.map((store) => store.id)
@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
         plan: "free",
         traffic_limit: freeLimits.traffic,
         product_limit: freeLimits.products,
+        order_limit: freeLimits.orders,
         subscription_expires_at: null,
         updated_at: new Date().toISOString(),
       })

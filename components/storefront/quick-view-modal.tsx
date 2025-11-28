@@ -7,11 +7,6 @@ import {
   ShoppingCart,
   CaretLeft,
   CaretRight,
-  Heart,
-  ShareNetwork,
-  Truck,
-  ShieldCheck,
-  ArrowsClockwise,
   Minus,
   Plus,
   Check,
@@ -21,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/lib/cart-context"
 import { toast } from "sonner"
+import { useStorefrontUrl } from "@/lib/use-storefront-url"
 import {
   Dialog,
   DialogContent,
@@ -76,6 +72,7 @@ interface QuickViewModalProps {
   themeColor: string
   currency: string
   username: string
+  getUrl?: (path?: string) => string
 }
 
 export function QuickViewModal({ 
@@ -84,9 +81,14 @@ export function QuickViewModal({
   onClose, 
   themeColor, 
   currency,
-  username
+  username,
+  getUrl
 }: QuickViewModalProps) {
   const supabase = createClient()
+  // Always call hooks unconditionally
+  const { getUrl: getUrlFromHook } = useStorefrontUrl(username)
+  const getCheckoutUrl = getUrl || getUrlFromHook
+  
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [variants, setVariants] = useState<ProductVariant[]>([])
@@ -314,7 +316,7 @@ export function QuickViewModal({
     
     // Close modal and redirect to checkout
     onClose()
-    window.location.href = `/${username}/checkout`
+    window.location.href = getCheckoutUrl('/checkout')
   }
 
   return (
@@ -570,34 +572,6 @@ export function QuickViewModal({
                 >
                   Buy Now
                 </button>
-              </div>
-
-              {/* Wishlist & Share */}
-              <div className="flex gap-4 pt-2">
-                <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
-                  <Heart className="h-5 w-5" />
-                  <span className="text-sm">Add to Wishlist</span>
-                </button>
-                <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
-                  <ShareNetwork className="h-5 w-5" />
-                  <span className="text-sm">Share</span>
-                </button>
-              </div>
-
-              {/* Trust Badges */}
-              <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-200">
-                <div className="flex flex-col items-center text-center p-3 bg-gray-50 rounded-lg">
-                  <Truck className="h-6 w-6 text-gray-600 mb-1" />
-                  <span className="text-xs text-gray-600">Fast Delivery</span>
-                </div>
-                <div className="flex flex-col items-center text-center p-3 bg-gray-50 rounded-lg">
-                  <ShieldCheck className="h-6 w-6 text-gray-600 mb-1" />
-                  <span className="text-xs text-gray-600">Secure Payment</span>
-                </div>
-                <div className="flex flex-col items-center text-center p-3 bg-gray-50 rounded-lg">
-                  <ArrowsClockwise className="h-6 w-6 text-gray-600 mb-1" />
-                  <span className="text-xs text-gray-600">Easy Returns</span>
-                </div>
               </div>
             </div>
           </div>

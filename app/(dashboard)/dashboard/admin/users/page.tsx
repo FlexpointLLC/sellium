@@ -261,10 +261,10 @@ export default function AdminUsersPage() {
 
   async function updateStorePlan(storeId: string, newPlan: string) {
     // Define plan limits
-    const planLimits: Record<string, { traffic: number; products: number }> = {
-      free: { traffic: 2000, products: 100 },
-      paid: { traffic: 50000, products: 1000 },
-      pro: { traffic: 999999999, products: 10000 } // Very high number for "unlimited"
+    const planLimits: Record<string, { traffic: number; products: number; orders: number | null }> = {
+      free: { traffic: 2000, products: 100, orders: 500 },
+      paid: { traffic: 50000, products: 1000, orders: 5000 },
+      pro: { traffic: 999999999, products: 10000, orders: null } // null means unlimited
     }
 
     const limits = planLimits[newPlan] || planLimits.free
@@ -274,6 +274,7 @@ export default function AdminUsersPage() {
       plan: newPlan,
       traffic_limit: limits.traffic,
       product_limit: limits.products,
+      order_limit: limits.orders,
       updated_at: new Date().toISOString()
     }
 
@@ -357,9 +358,9 @@ export default function AdminUsersPage() {
       }
 
       // Define plan limits
-      const planLimits: Record<string, { traffic: number; products: number }> = {
-        paid: { traffic: 50000, products: 1000 },
-        pro: { traffic: 999999999, products: 10000 }
+      const planLimits: Record<string, { traffic: number; products: number; orders: number | null }> = {
+        paid: { traffic: 50000, products: 1000, orders: 5000 },
+        pro: { traffic: 999999999, products: 10000, orders: null }
       }
 
       const limits = planLimits[changePlanData.plan] || planLimits.paid
@@ -371,6 +372,7 @@ export default function AdminUsersPage() {
           subscription_expires_at: expiresAt.toISOString(),
           traffic_limit: limits.traffic,
           product_limit: limits.products,
+          order_limit: limits.orders,
           updated_at: new Date().toISOString()
         })
         .eq("id", selectedUser.store.id)

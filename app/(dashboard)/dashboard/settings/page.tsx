@@ -986,7 +986,7 @@ function SettingsPageContent() {
     setSaving(true)
     try {
       // Define free plan limits
-      const freeLimits = { traffic: 2000, products: 100 }
+      const freeLimits = { traffic: 2000, products: 100, orders: 500 }
       const canceledPlan = store.plan // Store the plan being canceled
 
       // Create a cancellation record in upgrade_requests
@@ -1014,6 +1014,7 @@ function SettingsPageContent() {
           plan: 'free',
           traffic_limit: freeLimits.traffic,
           product_limit: freeLimits.products,
+          order_limit: freeLimits.orders,
           subscription_expires_at: null,
           updated_at: new Date().toISOString()
         })

@@ -38,6 +38,7 @@ interface Store {
   meta_title: string | null
   meta_description: string | null
   description: string | null
+  plan?: string
   linquo_org_id?: string | null
   available_time?: string | null
   social_media_text?: string | null
@@ -118,6 +119,9 @@ function CheckoutContent({ params }: { params: { username: string } }) {
   })
   const [shippingCost, setShippingCost] = useState(0)
   const [freeShipping, setFreeShipping] = useState(true)
+  const [orderCount, setOrderCount] = useState(0)
+  const [orderLimit, setOrderLimit] = useState<number | null>(null)
+  const [orderLimitReached, setOrderLimitReached] = useState(false)
   
   const { items, itemCount, subtotal, clearCart } = useCart()
 
@@ -147,7 +151,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
   async function fetchStore() {
     const { data: storeData, error: storeError } = await supabase
       .from("stores")
-      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description, linquo_org_id, payment_settings, available_time, social_media_text, copyright_text, show_powered_by")
+      .select("id, name, username, logo_url, theme_color, currency, social_links, address, favicon_url, meta_title, meta_description, description, linquo_org_id, payment_settings, available_time, social_media_text, copyright_text, show_powered_by, plan, order_limit")
       .eq("username", params.username)
       .single()
 
@@ -161,6 +165,37 @@ function CheckoutContent({ params }: { params: { username: string } }) {
       ...storeData,
       currency: storeData.currency || "BDT"
     })
+
+    // Use order_limit from database, or calculate based on plan if not set
+    let limit: number | null = null
+    if (storeData.order_limit !== null && storeData.order_limit !== undefined) {
+      limit = storeData.order_limit
+    } else {
+      // Fallback to plan-based calculation if order_limit is not set
+      const plan = storeData.plan || "free"
+      if (plan === "free") {
+        limit = 500
+      } else if (plan === "paid") {
+        limit = 5000
+      } else if (plan === "pro") {
+        limit = null // Unlimited
+      }
+    }
+    setOrderLimit(limit)
+
+    // Fetch current order count
+    const { count } = await supabase
+      .from("orders")
+      .select("*", { count: "exact", head: true })
+      .eq("store_id", storeData.id)
+      .neq("status", "cancelled")
+
+    if (count !== null) {
+      setOrderCount(count)
+      if (limit !== null && count >= limit) {
+        setOrderLimitReached(true)
+      }
+    }
 
     // Set enabled payment methods from store settings
     if (storeData.payment_settings) {
@@ -234,6 +269,12 @@ function CheckoutContent({ params }: { params: { username: string } }) {
     
     if (items.length === 0) {
       toast.error("Your cart is empty")
+      return
+    }
+
+    // Check if order limit is reached
+    if (orderLimitReached) {
+      toast.error(`Order limit reached (${orderCount}/${orderLimit}). This store has reached its order limit. Please contact the store owner.`)
       return
     }
 
@@ -805,7 +846,9 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                   <div className="grid grid-cols-2 gap-4">
                     {enabledPaymentMethods.cod && (
                       <label 
-                        className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                        className={`flex items-center gap-3 p-4 border rounded-lg transition-colors ${
+                          orderLimitReached ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        } ${
                           formData.paymentMethod === "cod" ? "border-2" : "border-gray-200"
                         }`}
                         style={{ borderColor: formData.paymentMethod === "cod" ? themeColor : undefined }}
@@ -817,6 +860,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                           checked={formData.paymentMethod === "cod"}
                           onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
                           className="sr-only"
+                          disabled={orderLimitReached}
                         />
                         <div 
                           className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
@@ -837,7 +881,9 @@ function CheckoutContent({ params }: { params: { username: string } }) {
 
                     {enabledPaymentMethods.bkash && (
                       <label 
-                        className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                        className={`flex items-center gap-3 p-4 border rounded-lg transition-colors ${
+                          orderLimitReached ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        } ${
                           formData.paymentMethod === "bkash" ? "border-2" : "border-gray-200"
                         }`}
                         style={{ borderColor: formData.paymentMethod === "bkash" ? themeColor : undefined }}
@@ -849,6 +895,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                           checked={formData.paymentMethod === "bkash"}
                           onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
                           className="sr-only"
+                          disabled={orderLimitReached}
                         />
                         <div 
                           className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
@@ -869,7 +916,9 @@ function CheckoutContent({ params }: { params: { username: string } }) {
 
                     {enabledPaymentMethods.nagad && (
                       <label 
-                        className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                        className={`flex items-center gap-3 p-4 border rounded-lg transition-colors ${
+                          orderLimitReached ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        } ${
                           formData.paymentMethod === "nagad" ? "border-2" : "border-gray-200"
                         }`}
                         style={{ borderColor: formData.paymentMethod === "nagad" ? themeColor : undefined }}
@@ -881,6 +930,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                           checked={formData.paymentMethod === "nagad"}
                           onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
                           className="sr-only"
+                          disabled={orderLimitReached}
                         />
                         <div 
                           className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
@@ -901,7 +951,9 @@ function CheckoutContent({ params }: { params: { username: string } }) {
 
                     {enabledPaymentMethods.card && (
                       <label 
-                        className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                        className={`flex items-center gap-3 p-4 border rounded-lg transition-colors ${
+                          orderLimitReached ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        } ${
                           formData.paymentMethod === "card" ? "border-2" : "border-gray-200"
                         }`}
                         style={{ borderColor: formData.paymentMethod === "card" ? themeColor : undefined }}
@@ -913,6 +965,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                           checked={formData.paymentMethod === "card"}
                           onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
                           className="sr-only"
+                          disabled={orderLimitReached}
                         />
                         <div 
                           className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
@@ -931,6 +984,15 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                       </label>
                     )}
                   </div>
+
+                  {/* Order Limit Reached Message */}
+                  {orderLimitReached && (
+                    <div className="mt-4 p-4 rounded-lg border border-red-200 bg-red-50">
+                      <p className="text-sm text-red-800 font-medium">
+                        Order limit reached ({orderCount}/{orderLimit}). This store has reached its order limit. Please contact the store owner or try again later.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Manual Payment Instructions for bKash */}
                   {formData.paymentMethod === "bkash" && paymentConfig.bkash.mode === "manual" && (
@@ -1104,6 +1166,7 @@ function CheckoutContent({ params }: { params: { username: string } }) {
                     className="w-full text-white"
                     style={{ backgroundColor: themeColor }}
                     disabled={
+                      orderLimitReached ||
                       submitting || 
                       (formData.paymentMethod === "bkash" && paymentConfig.bkash.mode === "manual" && (!manualPaymentData.confirmed || !manualPaymentData.transactionId)) ||
                       (formData.paymentMethod === "nagad" && paymentConfig.nagad.mode === "manual" && (!manualPaymentData.confirmed || !manualPaymentData.transactionId))

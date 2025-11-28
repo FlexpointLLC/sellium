@@ -122,6 +122,7 @@ interface Store {
   id: string
   username: string
   currency: string
+  product_limit?: number
 }
 
 // Cascading Category Dropdown Component
@@ -406,10 +407,10 @@ export default function ProductsPage() {
       return
     }
 
-    // Fetch full store data including currency
+    // Fetch full store data including currency and product_limit
     const { data: storeData } = await supabase
       .from("stores")
-      .select("id, username, currency")
+      .select("id, username, currency, product_limit")
       .eq("id", currentStore.store_id)
       .single()
 
@@ -417,7 +418,8 @@ export default function ProductsPage() {
       setStore({
         id: storeData.id,
         username: storeData.username,
-        currency: storeData.currency || "USD"
+        currency: storeData.currency || "USD",
+        product_limit: storeData.product_limit
       })
     } else {
       setLoading(false)
@@ -2190,7 +2192,14 @@ export default function ProductsPage() {
           <h1 className="text-xl font-normal">Products</h1>
           <p className="text-sm font-normal text-muted-foreground">Manage your product inventory</p>
         </div>
-        <Button size="sm" onClick={() => { resetForm(); setIsAddDialogOpen(true); }}>
+        <Button 
+          size="sm" 
+          onClick={() => { resetForm(); setIsAddDialogOpen(true); }}
+          disabled={store?.product_limit !== undefined && products.length >= store.product_limit}
+          title={store?.product_limit !== undefined && products.length >= store.product_limit 
+            ? `Product limit reached (${products.length}/${store.product_limit}). Upgrade your plan to add more products.` 
+            : undefined}
+        >
           <Plus />
           Add Product
         </Button>
@@ -2241,6 +2250,10 @@ export default function ProductsPage() {
                           size="sm"
                           className="mt-4"
                           onClick={() => { resetForm(); setIsAddDialogOpen(true); }}
+                          disabled={store?.product_limit !== undefined && products.length >= store.product_limit}
+                          title={store?.product_limit !== undefined && products.length >= store.product_limit 
+                            ? `Product limit reached (${products.length}/${store.product_limit}). Upgrade your plan to add more products.` 
+                            : undefined}
                         >
                           <Plus />
                           Add your first product

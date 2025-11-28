@@ -22,6 +22,7 @@ DECLARE
   expired_stores UUID[];
   free_traffic_limit INTEGER := 2000;
   free_product_limit INTEGER := 100;
+  free_order_limit INTEGER := 500;
 BEGIN
   -- Find all stores with expired subscriptions
   SELECT ARRAY_AGG(id)
@@ -38,6 +39,7 @@ BEGIN
       plan = 'free',
       traffic_limit = free_traffic_limit,
       product_limit = free_product_limit,
+      order_limit = free_order_limit,
       subscription_expires_at = NULL,
       updated_at = NOW()
     WHERE id = ANY(expired_stores);

@@ -101,6 +101,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'product_limit') THEN
     ALTER TABLE public.stores ADD COLUMN product_limit INTEGER DEFAULT 100;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'order_limit') THEN
+    ALTER TABLE public.stores ADD COLUMN order_limit INTEGER DEFAULT 500;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'subscription_expires_at') THEN
     ALTER TABLE public.stores ADD COLUMN subscription_expires_at TIMESTAMP WITH TIME ZONE;
   END IF;
@@ -358,6 +361,7 @@ CREATE TABLE IF NOT EXISTS public.stores (
   plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'paid', 'pro')),
   traffic_limit INTEGER DEFAULT 2000,
   product_limit INTEGER DEFAULT 100,
+  order_limit INTEGER DEFAULT 500,
   subscription_expires_at TIMESTAMP WITH TIME ZONE,
   available_time TEXT,
   social_media_text TEXT,
