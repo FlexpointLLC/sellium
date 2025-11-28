@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise, Copy, Check, Lock, Users, Envelope, UserPlus, FileText, Crown } from "phosphor-react"
+import { Gear, User, Bell, Shield, CreditCard, Storefront, Upload, Image as ImageIcon, Globe, Clock, MapPin, X, Plus, Trash, Link as LinkIcon, CheckCircle, XCircle, ArrowsClockwise, Copy, Check, Lock, Users, Envelope, UserPlus, FileText, Crown, Receipt } from "phosphor-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,8 +25,9 @@ import {
 } from "@/components/ui/alert-dialog"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { UpgradeDialog } from "@/components/upgrade-dialog"
 
-type TabType = "store" | "profile" | "team" | "domain" | "notifications" | "payments" | "security" | "pages"
+type TabType = "store" | "profile" | "team" | "domain" | "notifications" | "payments" | "security" | "pages" | "billing"
 
 // Wrapper component to handle Suspense for useSearchParams
 export default function SettingsPage() {
@@ -67,13 +68,16 @@ function SettingsPageContent() {
   
   // Get initial tab from URL or default to "store"
   const tabFromUrl = searchParams.get("tab") as TabType | null
-  const validTabs: TabType[] = ["store", "profile", "team", "domain", "notifications", "payments", "security", "pages"]
+  const validTabs: TabType[] = ["store", "profile", "team", "domain", "notifications", "payments", "security", "pages", "billing"]
   const initialTab = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : "store"
   
   const [activeTab, setActiveTab] = useState<TabType>(initialTab)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [storeId, setStoreId] = useState<string | null>(null)
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
+  const [upgradeRequests, setUpgradeRequests] = useState<any[]>([])
+  const [cancelSubscriptionDialogOpen, setCancelSubscriptionDialogOpen] = useState(false)
   
   // Update URL when tab changes
   const handleTabChange = (tab: TabType) => {
@@ -121,6 +125,7 @@ function SettingsPageContent() {
     social_media_text: "",
     copyright_text: "",
     show_powered_by: true,
+    subscription_expires_at: null as string | null,
     address: {
       street: "",
       city: "",
@@ -482,7 +487,10 @@ function SettingsPageContent() {
     if (activeTab === "pages" && storeId) {
       fetchStorePages()
     }
-  }, [activeTab, storeId])
+    if (storeId) {
+      fetchUpgradeRequests()
+    }
+  }, [storeId])
 
   async function fetchData() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -536,6 +544,7 @@ function SettingsPageContent() {
         social_media_text: storeData.social_media_text || "",
         copyright_text: storeData.copyright_text || "",
         show_powered_by: storeData.show_powered_by !== undefined ? storeData.show_powered_by : true,
+        subscription_expires_at: storeData.subscription_expires_at || null,
         address: storeData.address || {
           street: "",
           city: "",
@@ -894,6 +903,87 @@ function SettingsPageContent() {
 
     toast.success("Team member removed successfully")
     fetchTeamMembers()
+  }
+
+  // Fetch upgrade requests
+  async function fetchUpgradeRequests() {
+    if (!storeId) return
+
+    const { data: requestsData } = await supabase
+      .from("upgrade_requests")
+      .select("*")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false })
+      .limit(10)
+
+    if (requestsData) {
+      setUpgradeRequests(requestsData)
+    }
+  }
+
+  async function handleCancelSubscription() {
+    if (!storeId) return
+
+    setSaving(true)
+    try {
+      // Define free plan limits
+      const freeLimits = { traffic: 2000, products: 100 }
+      const canceledPlan = store.plan // Store the plan being canceled
+
+      // Create a cancellation record in upgrade_requests
+      const { error: cancelRecordError } = await supabase
+        .from("upgrade_requests")
+        .insert({
+          store_id: storeId,
+          current_plan: canceledPlan,
+          requested_plan: canceledPlan === 'paid' ? 'paid' : 'pro', // Placeholder, doesn't matter for canceled
+          transaction_id: 'CANCELED',
+          billing_period: 'monthly',
+          status: 'canceled',
+          notes: 'Subscription canceled by user'
+        })
+
+      if (cancelRecordError) {
+        console.error("Error creating cancellation record:", cancelRecordError)
+        // Continue anyway - cancellation record is not critical
+      }
+
+      // Update store to free plan
+      const { error } = await supabase
+        .from("stores")
+        .update({
+          plan: 'free',
+          traffic_limit: freeLimits.traffic,
+          product_limit: freeLimits.products,
+          subscription_expires_at: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", storeId)
+
+      if (error) {
+        console.error("Error canceling subscription:", error)
+        toast.error("Failed to cancel subscription. Please try again.")
+        setSaving(false)
+        return
+      }
+
+      // Update local state
+      setStore({
+        ...store,
+        plan: 'free'
+      })
+
+      // Refresh upgrade requests to show the cancellation
+      fetchUpgradeRequests()
+
+      toast.success("Subscription canceled successfully. You've been moved to the Free plan.")
+      setCancelSubscriptionDialogOpen(false)
+    } catch (err) {
+      console.error("Cancel subscription error:", err)
+      toast.error("Something went wrong. Please try again.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   // Fetch store pages
@@ -1855,6 +1945,7 @@ function SettingsPageContent() {
   const tabs = [
     { id: "store" as TabType, label: "Store", icon: Storefront },
     { id: "payments" as TabType, label: "Payments", icon: CreditCard },
+    { id: "billing" as TabType, label: "Plan & Billing", icon: Receipt },
     { id: "domain" as TabType, label: "Custom Domain", icon: LinkIcon },
     { id: "profile" as TabType, label: "Profile", icon: User },
     { id: "team" as TabType, label: "Team", icon: Users },
@@ -1912,6 +2003,26 @@ function SettingsPageContent() {
 
         {/* Main Content */}
         <div className="lg:col-span-3">
+          {/* Pending Upgrade Request Banner */}
+          {upgradeRequests.some((req) => req.status === 'pending') && (
+            <div className="mb-6 rounded-xl border border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <Crown className="h-5 w-5 text-orange-600 dark:text-orange-400" weight="fill" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-orange-900 dark:text-orange-100 mb-1">
+                    Your upgrade request is in progress
+                  </h3>
+                  <p className="text-xs text-orange-700 dark:text-orange-300">
+                    We are reviewing your upgrade request. It typically takes 1 to 24 hours to verify your transaction. 
+                    You will be notified once your request has been processed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Store Tab */}
           {activeTab === "store" && (
             <div className="rounded-lg border border-border/50 bg-card p-6">
@@ -4235,6 +4346,346 @@ function SettingsPageContent() {
             </div>
           )}
 
+          {/* Plan & Billing Tab */}
+          {activeTab === "billing" && (
+            <div className="rounded-lg border border-border/50 bg-card p-6">
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold">Plan & Billing</h2>
+                <p className="text-sm text-muted-foreground">Manage your subscription plan and billing information</p>
+              </div>
+
+              <div className="space-y-6">
+                {/* Current Plan */}
+                <div className="rounded-xl border border-border/50 bg-card p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-base font-semibold">Current Plan</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {store.plan === 'free' && 'Free Plan - Perfect for getting started'}
+                        {store.plan === 'paid' && 'Paid Plan - For growing businesses'}
+                        {store.plan === 'pro' && 'Pro Plan - For established businesses'}
+                      </p>
+                    </div>
+                    <div className={`px-4 py-2 rounded-lg font-medium ${
+                      store.plan === 'free' ? 'bg-gray-100 text-gray-700' :
+                      store.plan === 'paid' ? 'bg-orange-100 text-orange-700' :
+                      'bg-purple-100 text-purple-700'
+                    }`}>
+                      {store.plan === 'free' ? 'Free' : store.plan === 'paid' ? 'Paid' : 'Pro'}
+                    </div>
+                  </div>
+
+                  {/* Plan Limits */}
+                  <div className="grid grid-cols-3 gap-4 mt-6">
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Traffic Limit</p>
+                      <p className="text-lg font-semibold">
+                        {store.plan === 'free' ? '2,000' : store.plan === 'paid' ? '50,000' : 'Unlimited'} visits/month
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Product Limit</p>
+                      <p className="text-lg font-semibold">
+                        {store.plan === 'free' ? '100' : store.plan === 'paid' ? '1,000' : '10,000'} products
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Order Limit</p>
+                      <p className="text-lg font-semibold">
+                        {store.plan === 'free' ? '500' : store.plan === 'paid' ? '5,000' : 'Unlimited'} orders
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Cancel Subscription and Renew Subscription Buttons */}
+                  {store.plan !== 'free' && (
+                    <div className="mt-6 pt-6 border-t border-border/50">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        {/* Renew Subscription Button - Show when 7 days or less remaining */}
+                        {(() => {
+                          if (!store.subscription_expires_at) return null
+                          
+                          const expiresAt = new Date(store.subscription_expires_at)
+                          const now = new Date()
+                          // Reset time to start of day for accurate day calculation
+                          const expiresDate = new Date(expiresAt.getFullYear(), expiresAt.getMonth(), expiresAt.getDate())
+                          const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                          const daysLeft = Math.ceil((expiresDate.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24))
+                          
+                          if (daysLeft <= 7 && daysLeft >= 0) {
+                            return (
+                              <Button
+                                variant="default"
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                onClick={() => setUpgradeDialogOpen(true)}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Renew Subscription
+                              </Button>
+                            )
+                          }
+                          return null
+                        })()}
+                        
+                        {/* Cancel Subscription Button */}
+                        <Button
+                          variant="outline"
+                          className={`${(() => {
+                            if (!store.subscription_expires_at) return "w-full"
+                            
+                            const expiresAt = new Date(store.subscription_expires_at)
+                            const now = new Date()
+                            const expiresDate = new Date(expiresAt.getFullYear(), expiresAt.getMonth(), expiresAt.getDate())
+                            const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                            const daysLeft = Math.ceil((expiresDate.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24))
+                            
+                            return daysLeft <= 7 && daysLeft >= 0 ? "flex-1" : "w-full"
+                          })()} border-red-300 hover:bg-red-50 hover:border-red-400 text-red-600`}
+                          onClick={() => setCancelSubscriptionDialogOpen(true)}
+                        >
+                          Cancel Subscription
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Plan Features Comparison */}
+                <div className="rounded-xl border border-border/50 bg-card p-6">
+                  <h3 className="text-base font-semibold mb-4">Plan Features</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Paid Plan Features */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Crown className="h-5 w-5 text-orange-500" weight="fill" />
+                        <h4 className="font-semibold text-orange-600">Paid Plan</h4>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Up to 1,000 products</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">50,000 monthly visits</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Up to 5,000 orders</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Custom domain</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Advanced store customization</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Priority support</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <XCircle className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm text-muted-foreground">Advanced analytics</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <XCircle className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm text-muted-foreground">API access</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pro Plan Features */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Crown className="h-5 w-5 text-purple-500" weight="fill" />
+                        <h4 className="font-semibold text-purple-600">Pro Plan</h4>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Up to 10,000 products</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Unlimited monthly visits</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Unlimited orders</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Custom domain</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Advanced store customization</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Priority support</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">Advanced analytics</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm">API access</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upgrade Options */}
+                {store.plan !== 'pro' && (
+                  <div className="rounded-xl border border-border/50 bg-card p-6">
+                    <h3 className="text-base font-semibold mb-4">Upgrade Plan</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Unlock more features and grow your business with a higher plan.
+                    </p>
+                    <div className="flex gap-3">
+                      {store.plan === 'free' && (
+                        <>
+                          <Button 
+                            variant="outline" 
+                            className="flex-1 border-orange-300 hover:bg-orange-50"
+                            onClick={() => setUpgradeDialogOpen(true)}
+                          >
+                            <Crown className="h-4 w-4 mr-2 text-orange-500" weight="fill" />
+                            Upgrade to Paid
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            className="flex-1 border-purple-300 hover:bg-purple-50"
+                            onClick={() => setUpgradeDialogOpen(true)}
+                          >
+                            <Crown className="h-4 w-4 mr-2 text-purple-500" weight="fill" />
+                            Upgrade to Pro
+                          </Button>
+                        </>
+                      )}
+                      {store.plan === 'paid' && (
+                        <Button 
+                          variant="outline" 
+                          className="flex-1 border-purple-300 hover:bg-purple-50"
+                          onClick={() => setUpgradeDialogOpen(true)}
+                        >
+                          <Crown className="h-4 w-4 mr-2 text-purple-500" weight="fill" />
+                          Upgrade to Pro
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Billing Information */}
+                <div className="rounded-xl border border-border/50 bg-card p-6">
+                  <h3 className="text-base font-semibold mb-4">Billing Information</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-2 border-b border-border/50">
+                      <span className="text-sm text-muted-foreground">Billing Cycle</span>
+                      <span className="text-sm font-medium">
+                        {store.plan === 'free' ? 'Free Forever' : 'Monthly'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-border/50">
+                      <span className="text-sm text-muted-foreground">Next Billing Date</span>
+                      <span className="text-sm font-medium">
+                        {store.plan === 'free' ? 'N/A' : 
+                         store.subscription_expires_at 
+                           ? new Date(store.subscription_expires_at).toLocaleDateString('en-US', {
+                               year: 'numeric',
+                               month: 'short',
+                               day: 'numeric'
+                             })
+                           : 'Not set'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-muted-foreground">Payment Method</span>
+                      <div className="flex items-center gap-1.5">
+                        {store.plan === 'free' ? (
+                          <span className="text-sm font-medium">N/A</span>
+                        ) : (
+                          <>
+                            <img 
+                              src="/bkash.svg" 
+                              alt="bKash" 
+                              className="h-5 w-5 object-contain"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none'
+                              }}
+                            />
+                            <span className="text-sm font-medium">bKash</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upgrade Requests */}
+                {upgradeRequests.length > 0 && (
+                  <div className="rounded-xl border border-border/50 bg-card p-6">
+                    <h3 className="text-base font-semibold mb-4">Upgrade Requests</h3>
+                    <div className="space-y-3">
+                      {upgradeRequests.map((request) => {
+                        const isCanceled = request.status === 'canceled'
+                        const isUpgrade = !isCanceled
+                        
+                        return (
+                          <div key={request.id} className="flex items-center justify-between p-3 border border-border/50 rounded-lg">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">
+                                {isCanceled 
+                                  ? `Canceled ${request.current_plan === 'paid' ? 'Paid' : 'Pro'} Plan Subscription`
+                                  : `Upgrade to ${request.requested_plan === 'paid' ? 'Paid' : 'Pro'} Plan`
+                                }
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {isCanceled ? 'Canceled' : 'Requested'} on {new Date(request.created_at).toLocaleDateString()}
+                                {isUpgrade && request.transaction_id && request.transaction_id !== 'CANCELED' && ` • Transaction: ${request.transaction_id}`}
+                              </p>
+                            </div>
+                            <div>
+                              <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                                request.status === 'approved' ? 'bg-green-500/10 text-green-500' :
+                                request.status === 'rejected' ? 'bg-red-500/10 text-red-500' :
+                                request.status === 'canceled' ? 'bg-gray-500/10 text-gray-500' :
+                                'bg-yellow-500/10 text-yellow-500'
+                              }`}>
+                                {request.status === 'approved' ? 'Approved' :
+                                 request.status === 'rejected' ? 'Rejected' :
+                                 request.status === 'canceled' ? 'Canceled' :
+                                 'Pending'}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Billing History */}
+                <div className="rounded-xl border border-border/50 bg-card p-6">
+                  <h3 className="text-base font-semibold mb-4">Billing History</h3>
+                  {store.plan === 'free' ? (
+                    <p className="text-sm text-muted-foreground">No billing history available for free plans.</p>
+                  ) : upgradeRequests.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No invoices found.</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Billing history will appear here after successful upgrades.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Security Tab */}
           {activeTab === "security" && (
             <div className="rounded-lg border border-border/50 bg-card p-6">
@@ -4356,6 +4807,47 @@ function SettingsPageContent() {
           </AlertDialog>
         </div>
       </div>
+
+      {/* Upgrade Dialog */}
+      {storeId && (
+        <UpgradeDialog
+          open={upgradeDialogOpen}
+          onOpenChange={(open) => {
+            setUpgradeDialogOpen(open)
+            if (!open && activeTab === 'billing') {
+              // Refresh upgrade requests when dialog closes
+              fetchUpgradeRequests()
+            }
+          }}
+          currentPlan={store.plan as 'free' | 'paid' | 'pro'}
+          storeId={storeId}
+        />
+      )}
+
+      {/* Cancel Subscription Dialog */}
+      <AlertDialog open={cancelSubscriptionDialogOpen} onOpenChange={setCancelSubscriptionDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel your {store.plan === 'paid' ? 'Paid' : 'Pro'} subscription? 
+              You will be moved to the Free plan immediately and will lose access to premium features.
+              <br /><br />
+              <strong>This action cannot be undone.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Keep Subscription</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelSubscription}
+              disabled={saving}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {saving ? "Canceling..." : "Yes, Cancel Subscription"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

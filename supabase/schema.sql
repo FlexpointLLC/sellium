@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS public.upgrade_requests (
   current_plan TEXT NOT NULL CHECK (current_plan IN ('free', 'paid', 'pro')),
   requested_plan TEXT NOT NULL CHECK (requested_plan IN ('paid', 'pro')),
   transaction_id TEXT NOT NULL,
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'canceled')),
   reviewed_at TIMESTAMP WITH TIME ZONE,
   reviewed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   notes TEXT,
@@ -52,6 +52,26 @@ BEGIN
     -- Make it NOT NULL after updating existing records
     ALTER TABLE public.upgrade_requests ALTER COLUMN current_plan SET NOT NULL;
   END IF;
+END $$;
+
+-- Add billing_period column to existing upgrade_requests table if it doesn't exist
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'upgrade_requests' AND column_name = 'billing_period') THEN
+    ALTER TABLE public.upgrade_requests ADD COLUMN billing_period TEXT DEFAULT 'monthly' CHECK (billing_period IN ('monthly', 'yearly'));
+    -- Update existing records to have a default billing_period
+    UPDATE public.upgrade_requests SET billing_period = 'monthly' WHERE billing_period IS NULL;
+  END IF;
+END $$;
+
+-- Update status constraint to include 'canceled'
+DO $$ 
+BEGIN
+  -- Drop the old constraint if it exists
+  ALTER TABLE public.upgrade_requests DROP CONSTRAINT IF EXISTS upgrade_requests_status_check;
+  -- Add the new constraint with 'canceled' status
+  ALTER TABLE public.upgrade_requests ADD CONSTRAINT upgrade_requests_status_check 
+    CHECK (status IN ('pending', 'approved', 'rejected', 'canceled'));
 END $$;
 
 -- Add missing columns to stores
@@ -80,6 +100,9 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'product_limit') THEN
     ALTER TABLE public.stores ADD COLUMN product_limit INTEGER DEFAULT 100;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stores' AND column_name = 'subscription_expires_at') THEN
+    ALTER TABLE public.stores ADD COLUMN subscription_expires_at TIMESTAMP WITH TIME ZONE;
   END IF;
 END $$;
 
@@ -327,6 +350,7 @@ CREATE TABLE IF NOT EXISTS public.stores (
   plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'paid', 'pro')),
   traffic_limit INTEGER DEFAULT 2000,
   product_limit INTEGER DEFAULT 100,
+  subscription_expires_at TIMESTAMP WITH TIME ZONE,
   available_time TEXT,
   social_media_text TEXT,
   copyright_text TEXT,
@@ -727,7 +751,8 @@ CREATE TABLE IF NOT EXISTS public.upgrade_requests (
   current_plan TEXT NOT NULL CHECK (current_plan IN ('free', 'paid', 'pro')),
   requested_plan TEXT NOT NULL CHECK (requested_plan IN ('paid', 'pro')),
   transaction_id TEXT NOT NULL,
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  billing_period TEXT DEFAULT 'monthly' CHECK (billing_period IN ('monthly', 'yearly')),
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'canceled')),
   reviewed_at TIMESTAMP WITH TIME ZONE,
   reviewed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   notes TEXT,

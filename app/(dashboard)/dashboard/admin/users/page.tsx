@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { UserCircle, MagnifyingGlass, Pencil, Trash, User, Link as LinkIcon } from "phosphor-react"
+import { UserCircle, MagnifyingGlass, Pencil, Trash, User, Link as LinkIcon, Crown, CheckCircle } from "phosphor-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -67,7 +67,15 @@ export default function AdminUsersPage() {
   // Dialog states
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isChangePlanDialogOpen, setIsChangePlanDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
+  const [changePlanData, setChangePlanData] = useState<{
+    plan: 'paid' | 'pro'
+    billingPeriod: 'monthly' | 'yearly'
+  }>({
+    plan: 'paid',
+    billingPeriod: 'monthly'
+  })
   
   // Form state
   const [formData, setFormData] = useState({
@@ -261,14 +269,21 @@ export default function AdminUsersPage() {
 
     const limits = planLimits[newPlan] || planLimits.free
 
+    // Clear subscription expiration for free plan, keep it for paid/pro
+    const updateData: any = {
+      plan: newPlan,
+      traffic_limit: limits.traffic,
+      product_limit: limits.products,
+      updated_at: new Date().toISOString()
+    }
+
+    if (newPlan === 'free') {
+      updateData.subscription_expires_at = null
+    }
+
     const { error } = await supabase
       .from("stores")
-      .update({ 
-        plan: newPlan,
-        traffic_limit: limits.traffic,
-        product_limit: limits.products,
-        updated_at: new Date().toISOString() 
-      })
+      .update(updateData)
       .eq("id", storeId)
 
     if (error) {
@@ -311,6 +326,75 @@ export default function AdminUsersPage() {
   function openDeleteDialog(user: UserData) {
     setSelectedUser(user)
     setIsDeleteDialogOpen(true)
+  }
+
+  function openChangePlanDialog(user: UserData) {
+    setSelectedUser(user)
+    // Pre-select current plan if user has a store
+    if (user.store) {
+      const currentPlan = user.store.plan === 'paid' ? 'paid' : user.store.plan === 'pro' ? 'pro' : 'paid'
+      setChangePlanData({
+        plan: currentPlan as 'paid' | 'pro',
+        billingPeriod: 'monthly'
+      })
+    }
+    setIsChangePlanDialogOpen(true)
+  }
+
+  async function handleChangePlan() {
+    if (!selectedUser || !selectedUser.store) {
+      toast.error("User doesn't have a store")
+      return
+    }
+
+    try {
+      // Calculate subscription expiration date
+      const expiresAt = new Date()
+      if (changePlanData.billingPeriod === 'monthly') {
+        expiresAt.setMonth(expiresAt.getMonth() + 1)
+      } else {
+        expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+      }
+
+      // Define plan limits
+      const planLimits: Record<string, { traffic: number; products: number }> = {
+        paid: { traffic: 50000, products: 1000 },
+        pro: { traffic: 999999999, products: 10000 }
+      }
+
+      const limits = planLimits[changePlanData.plan] || planLimits.paid
+
+      const { error } = await supabase
+        .from("stores")
+        .update({
+          plan: changePlanData.plan,
+          subscription_expires_at: expiresAt.toISOString(),
+          traffic_limit: limits.traffic,
+          product_limit: limits.products,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", selectedUser.store.id)
+
+      if (error) {
+        toast.error("Failed to change plan")
+        return
+      }
+
+      toast.success(`Plan changed to ${changePlanData.plan === 'paid' ? 'Paid' : 'Pro'} successfully`)
+      setIsChangePlanDialogOpen(false)
+      fetchUsers()
+    } catch (err) {
+      console.error("Change plan error:", err)
+      toast.error("Something went wrong")
+    }
+  }
+
+  function calculatePlanAmount(plan: string, billingPeriod: string): number {
+    if (plan === 'paid') {
+      return billingPeriod === 'monthly' ? 500 : 5000
+    } else {
+      return billingPeriod === 'monthly' ? 1500 : 15000
+    }
   }
 
   async function handleSave() {
@@ -596,6 +680,16 @@ export default function AdminUsersPage() {
                   <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">{formatDate(user.created_at)}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">
+                      {user.store && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon-sm" 
+                          onClick={() => openChangePlanDialog(user)}
+                          title="Change Plan"
+                        >
+                          <Crown className="h-4 w-4 text-orange-500" />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon-sm" onClick={() => openEditDialog(user)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -719,6 +813,147 @@ export default function AdminUsersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Change Plan Dialog */}
+      <Dialog open={isChangePlanDialogOpen} onOpenChange={setIsChangePlanDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crown className="h-5 w-5 text-orange-600" weight="fill" />
+              Change Plan
+            </DialogTitle>
+            <DialogDescription>
+              Select a plan and billing period for {selectedUser?.name || selectedUser?.email}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Plan Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Plan</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setChangePlanData({ ...changePlanData, plan: 'paid' })}
+                  className={`relative p-4 rounded-lg border-2 transition-all text-left ${
+                    changePlanData.plan === 'paid'
+                      ? 'border-orange-600 bg-orange-50 dark:bg-orange-950/20'
+                      : 'border-border hover:border-orange-300'
+                  }`}
+                >
+                  {changePlanData.plan === 'paid' && (
+                    <div className="absolute top-2 right-2">
+                      <div className="w-5 h-5 rounded-full bg-orange-600 flex items-center justify-center">
+                        <CheckCircle className="h-3 w-3 text-white" weight="bold" />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mb-2">
+                    <Crown className="h-4 w-4 text-orange-600" weight="fill" />
+                    <span className="font-semibold text-sm">Paid Plan</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    1,000 products, 50k traffic, 5k orders
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setChangePlanData({ ...changePlanData, plan: 'pro' })}
+                  className={`relative p-4 rounded-lg border-2 transition-all text-left ${
+                    changePlanData.plan === 'pro'
+                      ? 'border-purple-600 bg-purple-50 dark:bg-purple-950/20'
+                      : 'border-border hover:border-purple-300'
+                  }`}
+                >
+                  {changePlanData.plan === 'pro' && (
+                    <div className="absolute top-2 right-2">
+                      <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center">
+                        <CheckCircle className="h-3 w-3 text-white" weight="bold" />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mb-2">
+                    <Crown className="h-4 w-4 text-purple-600" weight="fill" />
+                    <span className="font-semibold text-sm">Pro Plan</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    10k products, Unlimited traffic & orders
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* Billing Period Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Billing Period</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setChangePlanData({ ...changePlanData, billingPeriod: 'monthly' })}
+                  className={`p-3 rounded-lg border-2 transition-all text-center ${
+                    changePlanData.billingPeriod === 'monthly'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <div className="font-semibold">Monthly</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {calculatePlanAmount(changePlanData.plan, 'monthly').toLocaleString()} BDT/month
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setChangePlanData({ ...changePlanData, billingPeriod: 'yearly' })}
+                  className={`p-3 rounded-lg border-2 transition-all text-center ${
+                    changePlanData.billingPeriod === 'yearly'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <div className="font-semibold">Yearly</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {calculatePlanAmount(changePlanData.plan, 'yearly').toLocaleString()} BDT/year
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div className="rounded-lg border border-border/50 bg-card p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total Amount</span>
+                <span className="text-lg font-bold">
+                  {calculatePlanAmount(changePlanData.plan, changePlanData.billingPeriod).toLocaleString()} BDT
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {changePlanData.billingPeriod === 'monthly' ? 'Billed monthly' : 'Billed yearly (save 2 months)'}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsChangePlanDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangePlan}
+              className={`${
+                changePlanData.plan === 'paid'
+                  ? 'bg-orange-600 hover:bg-orange-700'
+                  : 'bg-purple-600 hover:bg-purple-700'
+              } text-white`}
+            >
+              Change Plan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

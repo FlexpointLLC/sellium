@@ -25,7 +25,7 @@ export default function RootLayout({
       <body className="h-full">
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange={false}
         >

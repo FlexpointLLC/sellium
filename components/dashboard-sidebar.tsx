@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useState, useEffect } from "react"
 import {
   House,
@@ -18,6 +18,7 @@ import {
   Megaphone,
   ArrowCircleUp,
   Shield,
+  Clock,
 } from "phosphor-react"
 
 import {
@@ -133,12 +134,18 @@ const menuGroups = [
         url: "/dashboard/admin/upgrade-requests",
         icon: ArrowCircleUp,
       },
+      {
+        title: "Expiry",
+        url: "/dashboard/admin/upgrade-requests?tab=expiry",
+        icon: Clock,
+      },
     ],
   },
 ]
 
 export function DashboardSidebar() {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const supabase = createClient()
   const { state } = useSidebar()
@@ -148,6 +155,8 @@ export function DashboardSidebar() {
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
+  const [expiredSubscriptionsCount, setExpiredSubscriptionsCount] = useState(0)
   
   const isCollapsed = state === "collapsed"
 
@@ -183,11 +192,69 @@ export function DashboardSidebar() {
         setStoreId(store.id)
       }
 
+      // Fetch pending upgrade requests count and expired subscriptions count for admin users
+      if (profile?.role === 'admin') {
+        // Fetch pending upgrade requests
+        const { count: pendingCount } = await supabase
+          .from("upgrade_requests")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "pending")
+
+        if (pendingCount !== null) {
+          setPendingRequestsCount(pendingCount)
+        }
+
+        // Fetch expired subscriptions count
+        const now = new Date().toISOString()
+        const { count: expiredCount } = await supabase
+          .from("stores")
+          .select("*", { count: "exact", head: true })
+          .in("plan", ["paid", "pro"])
+          .not("subscription_expires_at", "is", null)
+          .lte("subscription_expires_at", now)
+
+        if (expiredCount !== null) {
+          setExpiredSubscriptionsCount(expiredCount)
+        }
+      }
+
       setLoading(false)
     }
 
     fetchUserData()
   }, [supabase])
+
+  // Set up polling for pending requests count and expired subscriptions (only for admin)
+  useEffect(() => {
+    if (userRole !== 'admin') return
+
+    const interval = setInterval(async () => {
+      // Fetch pending upgrade requests
+      const { count: pendingCount } = await supabase
+        .from("upgrade_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending")
+
+      if (pendingCount !== null) {
+        setPendingRequestsCount(pendingCount)
+      }
+
+      // Fetch expired subscriptions count
+      const now = new Date().toISOString()
+      const { count: expiredCount } = await supabase
+        .from("stores")
+        .select("*", { count: "exact", head: true })
+        .in("plan", ["paid", "pro"])
+        .not("subscription_expires_at", "is", null)
+        .lte("subscription_expires_at", now)
+
+      if (expiredCount !== null) {
+        setExpiredSubscriptionsCount(expiredCount)
+      }
+    }, 30000) // Poll every 30 seconds
+
+    return () => clearInterval(interval)
+  }, [supabase, userRole])
 
   return (
     <Sidebar collapsible="icon" className="!border-r-0">
@@ -233,20 +300,51 @@ export function DashboardSidebar() {
                       }
                       return true
                     })
-                    .map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={pathname === item.url}
-                          tooltip={item.title}
-                        >
-                          <Link href={item.url}>
-                            <item.icon className="h-4 w-4" weight={pathname === item.url ? "fill" : "regular"} />
-                            <span>{item.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
+                    .map((item) => {
+                      const showPendingBadge = item.title === "Upgrade Request" && userRole === 'admin' && pendingRequestsCount > 0
+                      const showExpiredBadge = item.title === "Expiry" && userRole === 'admin' && expiredSubscriptionsCount > 0
+                      
+                      // Determine if this item is active
+                      let isActive = false
+                      if (item.title === "Upgrade Request") {
+                        // Active if on upgrade-requests page and tab is not expiry
+                        isActive = pathname === "/dashboard/admin/upgrade-requests" && searchParams.get('tab') !== 'expiry'
+                      } else if (item.title === "Expiry") {
+                        // Active if on upgrade-requests page and tab is expiry
+                        isActive = pathname === "/dashboard/admin/upgrade-requests" && searchParams.get('tab') === 'expiry'
+                      } else {
+                        // For other items, check if pathname matches
+                        isActive = pathname === item.url
+                      }
+                      
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={isActive}
+                            tooltip={item.title}
+                            className="relative"
+                          >
+                            <Link href={item.url} className="flex items-center justify-between w-full">
+                              <div className="flex items-center gap-2">
+                                <item.icon className="h-4 w-4" weight={isActive ? "fill" : "regular"} />
+                                <span>{item.title}</span>
+                              </div>
+                              {showPendingBadge && (
+                                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
+                                  {pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}
+                                </span>
+                              )}
+                              {showExpiredBadge && (
+                                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-semibold text-white">
+                                  {expiredSubscriptionsCount > 99 ? '99+' : expiredSubscriptionsCount}
+                                </span>
+                              )}
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )
+                    })}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
