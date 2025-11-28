@@ -21,6 +21,7 @@ interface Store {
   currency?: string
   traffic_limit?: number
   product_limit?: number
+  order_limit?: number | null
 }
 
 interface Stats {
@@ -49,10 +50,10 @@ interface TopProduct {
   total_sold: number
 }
 
-const planLimits: Record<string, { traffic: string; products: number }> = {
-  free: { traffic: "2000", products: 100 },
-  paid: { traffic: "50k", products: 1000 },
-  pro: { traffic: "Unlimited", products: 10000 },
+const planLimits: Record<string, { traffic: string; products: number; orders: number | null }> = {
+  free: { traffic: "2000", products: 100, orders: 500 },
+  paid: { traffic: "50k", products: 1000, orders: 5000 },
+  pro: { traffic: "Unlimited", products: 10000, orders: null },
 }
 
 export default function DashboardPage() {
@@ -69,7 +70,6 @@ export default function DashboardPage() {
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [customDomain, setCustomDomain] = useState<{ domain: string; status: string } | null>(null)
-  const [currentTraffic, setCurrentTraffic] = useState(0)
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
   const [userRole, setUserRole] = useState<string>('owner')
 
@@ -139,7 +139,7 @@ export default function DashboardPage() {
       // Fetch stats
       const [productsResult, ordersResult, customersResult] = await Promise.all([
         supabase.from("products").select("id", { count: "exact" }).eq("store_id", storeData.id),
-        supabase.from("orders").select("id, total", { count: "exact" }).eq("store_id", storeData.id),
+        supabase.from("orders").select("id, total", { count: "exact" }).eq("store_id", storeData.id).neq("status", "cancelled"),
         supabase.from("customers").select("id", { count: "exact" }).eq("store_id", storeData.id),
       ])
 
@@ -252,42 +252,119 @@ export default function DashboardPage() {
       : `http://localhost:3000/${store.username}`
   const planInfo = planLimits[store.plan] || planLimits.free
   // Use database values if available, otherwise fallback to plan defaults
-  const trafficLimit = store.traffic_limit 
-    ? store.traffic_limit >= 1000000 
-      ? "Unlimited" 
-      : store.traffic_limit >= 5000 
-        ? `${(store.traffic_limit / 1000).toFixed(0)}k`
-        : store.traffic_limit.toString()
-    : planInfo.traffic
   const productLimit = store.product_limit ?? planInfo.products
+  const orderLimit = store.order_limit !== null && store.order_limit !== undefined 
+    ? store.order_limit 
+    : planInfo.orders
   const statusColor = store.status === "active" ? "text-green-600 bg-green-500/10" : "text-yellow-600 bg-yellow-500/10"
 
-  // Calculate numeric traffic limit for comparison
-  const getNumericTrafficLimit = (limit: string | number): number => {
-    if (typeof limit === 'number') return limit
-    if (limit === 'Unlimited') return Infinity
-    if (limit.endsWith('k')) {
-      return parseInt(limit.replace('k', '')) * 1000
-    }
-    return parseInt(limit) || 0
-  }
-
-  const numericTrafficLimit = store.traffic_limit || getNumericTrafficLimit(planInfo.traffic)
-  const numericProductLimit = productLimit
-
   // Check if limits are reached based on specific thresholds
-  // Free: Traffic >= 1900/2000 OR Products >= 90/100
-  // Paid: Traffic >= 49k/50k OR Products >= 995/1000
-  const trafficThreshold = store.plan === 'free' ? 1900 : 49000
+  // Free: Products >= 90/100 OR Orders >= 450/500
+  // Paid: Products >= 995/1000 OR Orders >= 4950/5000
   const productThreshold = store.plan === 'free' ? 90 : 995
+  const orderThreshold = store.plan === 'free' ? 450 : 4950
 
   const showUpgradeButton = store.plan !== 'pro' && (
-    (numericTrafficLimit !== Infinity && currentTraffic >= trafficThreshold) ||
-    stats.totalProducts >= productThreshold
+    stats.totalProducts >= productThreshold ||
+    (orderLimit !== null && stats.totalOrders >= orderThreshold)
   )
+
+  // Check if limits are actually reached (not just threshold)
+  const orderLimitReached = orderLimit !== null && stats.totalOrders >= orderLimit
+  const productLimitReached = stats.totalProducts >= productLimit
+  const showLimitBanner = (orderLimitReached || productLimitReached) && store.plan !== 'pro'
+
+  // Check if approaching limits (80% or more but not reached)
+  const orderLimitWarning = orderLimit !== null && 
+    stats.totalOrders >= (orderLimit * 0.8) && 
+    stats.totalOrders < orderLimit
+  const productLimitWarning = stats.totalProducts >= (productLimit * 0.8) && 
+    stats.totalProducts < productLimit
+  const showWarningBanner = (orderLimitWarning || productLimitWarning) && 
+    !showLimitBanner && 
+    store.plan !== 'pro'
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      {/* Warning Banner - Approaching Limit */}
+      {showWarningBanner && (
+        <div className="rounded-xl border border-yellow-300 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-950/20 dark:to-orange-950/20 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <Crown className="h-5 w-5 text-yellow-600 dark:text-yellow-400" weight="fill" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+                {orderLimitWarning && productLimitWarning 
+                  ? "Approaching Order and Product Limits"
+                  : orderLimitWarning
+                  ? "Approaching Order Limit"
+                  : "Approaching Product Limit"
+                }
+              </h3>
+              <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
+                {orderLimitWarning && productLimitWarning
+                  ? `You're approaching your order limit (${stats.totalOrders}/${orderLimit}) and product limit (${stats.totalProducts}/${productLimit}). Consider upgrading your plan to avoid interruptions.`
+                  : orderLimitWarning
+                  ? `You're approaching your order limit (${stats.totalOrders}/${orderLimit}). Consider upgrading your plan to continue receiving orders without interruption.`
+                  : `You're approaching your product limit (${stats.totalProducts}/${productLimit}). Consider upgrading your plan to add more products.`
+                }
+              </p>
+              <Button
+                onClick={() => setUpgradeDialogOpen(true)}
+                className={`text-xs font-medium ${
+                  store.plan === 'free'
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                    : 'bg-purple-600 hover:bg-purple-700 text-white'
+                }`}
+                size="sm"
+              >
+                Upgrade Plan
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Limit Reached Banner */}
+      {showLimitBanner && (
+        <div className="rounded-xl border border-red-300 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/20 dark:to-orange-950/20 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <Crown className="h-5 w-5 text-red-600 dark:text-red-400" weight="fill" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-1">
+                {orderLimitReached && productLimitReached 
+                  ? "Order and Product Limits Reached"
+                  : orderLimitReached
+                  ? "Order Limit Reached"
+                  : "Product Limit Reached"
+                }
+              </h3>
+              <p className="text-xs text-red-700 dark:text-red-300 mb-3">
+                {orderLimitReached && productLimitReached
+                  ? `You've reached your order limit (${stats.totalOrders}/${orderLimit}) and product limit (${stats.totalProducts}/${productLimit}). Upgrade your plan to continue adding products and receiving orders.`
+                  : orderLimitReached
+                  ? `You've reached your order limit (${stats.totalOrders}/${orderLimit}). Upgrade your plan to continue receiving orders.`
+                  : `You've reached your product limit (${stats.totalProducts}/${productLimit}). Upgrade your plan to add more products.`
+                }
+              </p>
+              <Button
+                onClick={() => setUpgradeDialogOpen(true)}
+                className={`text-xs font-medium ${
+                  store.plan === 'free'
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                    : 'bg-purple-600 hover:bg-purple-700 text-white'
+                }`}
+                size="sm"
+              >
+                Upgrade Plan
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-normal">Dashboard</h1>
@@ -373,11 +450,11 @@ export default function DashboardPage() {
                 </div>
                 <div className="w-px h-4 bg-border mx-4" />
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Traffic Limit:</span>
+                  <span className="text-muted-foreground">Order Limit:</span>
                   <span className="font-medium flex items-center gap-1">
                     {store.plan === 'free' && <Crown className="h-3.5 w-3.5 text-orange-500" weight="fill" />}
                     {store.plan === 'paid' && <Crown className="h-3.5 w-3.5 text-purple-500 drop-shadow-[0_0_4px_rgba(168,85,247,0.8)]" weight="fill" />}
-                    {store.plan === 'pro' ? 'Unlimited' : `${currentTraffic}/${trafficLimit}`}
+                    {orderLimit === null ? 'Unlimited' : `${stats.totalOrders}/${orderLimit}`}
                   </span>
                 </div>
                 <div className="w-px h-4 bg-border mx-4" />
