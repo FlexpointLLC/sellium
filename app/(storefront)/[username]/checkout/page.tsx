@@ -101,8 +101,8 @@ function CheckoutContent({ params }: { params: { username: string } }) {
   const { getUrl } = useStorefrontUrl(params.username)
   const [enabledPaymentMethods, setEnabledPaymentMethods] = useState({
     cod: true,
-    bkash: true,
-    nagad: true,
+    bkash: false,
+    nagad: false,
     card: false
   })
   const [paymentConfig, setPaymentConfig] = useState<{
@@ -171,8 +171,8 @@ function CheckoutContent({ params }: { params: { username: string } }) {
       if (paymentData.payment_methods) {
         setEnabledPaymentMethods({
           cod: paymentData.payment_methods.cod ?? true,
-          bkash: paymentData.payment_methods.bkash ?? true,
-          nagad: paymentData.payment_methods.nagad ?? true,
+          bkash: paymentData.payment_methods.bkash ?? false,
+          nagad: paymentData.payment_methods.nagad ?? false,
           card: paymentData.payment_methods.card ?? false
         })
 
