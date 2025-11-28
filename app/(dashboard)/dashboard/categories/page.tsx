@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
+import { useStore } from "@/lib/store-context"
 import {
   Dialog,
   DialogContent,
@@ -74,6 +75,7 @@ type DropPosition = "above" | "inside" | "below" | null
 export default function CategoriesPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { currentStore } = useStore()
   const [store, setStore] = useState<Store | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [flatCategories, setFlatCategories] = useState<Category[]>([])
@@ -106,12 +108,16 @@ export default function CategoriesPage() {
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>("")
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [slugError, setSlugError] = useState<string>("")
+  const [checkingSlug, setCheckingSlug] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetchData()
+    if (currentStore) {
+      fetchData()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [currentStore])
 
   // Build tree structure from flat categories
   function buildCategoryTree(flatList: Category[]): Category[] {
@@ -142,22 +148,14 @@ export default function CategoriesPage() {
   }
 
   async function fetchData() {
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      router.push("/login")
+    if (!currentStore) {
+      setLoading(false)
       return
     }
 
-    const { data: storeData, error: storeError } = await supabase
-      .from("stores")
-      .select("id, username")
-      .eq("user_id", user.id)
-      .single()
-
-    if (storeError || !storeData) {
-      router.push("/onboarding")
-      return
+    const storeData: Store = {
+      id: currentStore.store_id,
+      username: currentStore.store.username
     }
 
     setStore(storeData)
@@ -217,11 +215,65 @@ export default function CategoriesPage() {
   }
 
   function handleNameChange(name: string) {
+    const newSlug = generateSlug(name)
     setFormData({
       ...formData,
       name,
-      slug: generateSlug(name)
+      slug: newSlug
     })
+    // Clear error when name changes (slug will be regenerated)
+    if (slugError) {
+      setSlugError("")
+    }
+  }
+
+  // Check if slug already exists
+  async function checkSlugExists(slug: string, excludeId?: string): Promise<boolean> {
+    if (!store || !slug.trim()) return false
+
+    setCheckingSlug(true)
+    try {
+      let query = supabase
+        .from("categories")
+        .select("id")
+        .eq("store_id", store.id)
+        .eq("slug", slug.trim())
+
+      if (excludeId) {
+        query = query.neq("id", excludeId)
+      }
+
+      const { data, error } = await query.maybeSingle()
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" which is fine
+        console.error("Error checking slug:", error)
+        return false
+      }
+
+      return !!data
+    } catch (error) {
+      console.error("Error checking slug:", error)
+      return false
+    } finally {
+      setCheckingSlug(false)
+    }
+  }
+
+  async function handleSlugChange(slug: string) {
+    setFormData({ ...formData, slug })
+    setSlugError("")
+
+    if (!slug.trim()) {
+      return
+    }
+
+    // Check if slug exists (only when editing, exclude current category)
+    const excludeId = isEditDialogOpen ? selectedCategory?.id : undefined
+    const exists = await checkSlugExists(slug, excludeId)
+    
+    if (exists) {
+      setSlugError("Slug already exists")
+    }
   }
 
   function handleImageSelect(event: React.ChangeEvent<HTMLInputElement>) {
@@ -305,6 +357,7 @@ export default function CategoriesPage() {
     })
     setImageFile(null)
     setImagePreview("")
+    setSlugError("")
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -542,9 +595,20 @@ export default function CategoriesPage() {
   async function handleAddCategory() {
     if (!store || !formData.name.trim()) return
 
-    setSaving(true)
-
+    // Validate slug before proceeding
     const slug = formData.slug || generateSlug(formData.name)
+    const slugExists = await checkSlugExists(slug)
+    
+    if (slugExists) {
+      setSlugError("Slug already exists")
+      return
+    }
+
+    if (slugError) {
+      return // Don't proceed if there's a slug error
+    }
+
+    setSaving(true)
 
     let imageUrl: string | null = null
     if (imageFile) {
@@ -591,9 +655,20 @@ export default function CategoriesPage() {
   async function handleEditCategory() {
     if (!selectedCategory || !formData.name.trim()) return
 
-    setSaving(true)
-
+    // Validate slug before proceeding
     const slug = formData.slug || generateSlug(formData.name)
+    const slugExists = await checkSlugExists(slug, selectedCategory.id)
+    
+    if (slugExists) {
+      setSlugError("Slug already exists")
+      return
+    }
+
+    if (slugError) {
+      return // Don't proceed if there's a slug error
+    }
+
+    setSaving(true)
 
     let imageUrl: string | null = formData.image_url || null
     if (imageFile) {
@@ -1051,8 +1126,25 @@ export default function CategoriesPage() {
                 id="slug"
                 placeholder="e.g. men"
                 value={formData.slug}
-                onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                onChange={(e) => handleSlugChange(e.target.value)}
+                onBlur={() => {
+                  if (formData.slug.trim()) {
+                    checkSlugExists(formData.slug).then(exists => {
+                      if (exists) {
+                        setSlugError("Slug already exists")
+                      }
+                    })
+                  }
+                }}
+                className={slugError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                disabled={checkingSlug}
               />
+              {slugError && (
+                <p className="text-sm text-red-500">{slugError}</p>
+              )}
+              {checkingSlug && (
+                <p className="text-sm text-muted-foreground">Checking slug...</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
@@ -1084,7 +1176,7 @@ export default function CategoriesPage() {
             <Button variant="outline" size="sm" onClick={() => setIsAddDialogOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={handleAddCategory} disabled={saving || uploadingImage || !formData.name.trim()}>
+            <Button size="sm" onClick={handleAddCategory} disabled={saving || uploadingImage || !formData.name.trim() || !!slugError}>
               {uploadingImage ? "Uploading..." : saving ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>
@@ -1185,8 +1277,25 @@ export default function CategoriesPage() {
               <Input
                 id="edit-slug"
                 value={formData.slug}
-                onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                onChange={(e) => handleSlugChange(e.target.value)}
+                onBlur={() => {
+                  if (formData.slug.trim() && selectedCategory) {
+                    checkSlugExists(formData.slug, selectedCategory.id).then(exists => {
+                      if (exists) {
+                        setSlugError("Slug already exists")
+                      }
+                    })
+                  }
+                }}
+                className={slugError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                disabled={checkingSlug}
               />
+              {slugError && (
+                <p className="text-sm text-red-500">{slugError}</p>
+              )}
+              {checkingSlug && (
+                <p className="text-sm text-muted-foreground">Checking slug...</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-description">Description</Label>
@@ -1217,7 +1326,7 @@ export default function CategoriesPage() {
             <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={handleEditCategory} disabled={saving || uploadingImage || !formData.name.trim()}>
+            <Button size="sm" onClick={handleEditCategory} disabled={saving || uploadingImage || !formData.name.trim() || !!slugError}>
               {uploadingImage ? "Uploading..." : saving ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
