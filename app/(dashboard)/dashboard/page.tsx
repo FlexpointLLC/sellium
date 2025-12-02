@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { UpgradeDialog } from "@/components/upgrade-dialog"
+import { useStore } from "@/lib/store-context"
 
 interface Store {
   id: string
@@ -59,6 +60,7 @@ const planLimits: Record<string, { traffic: string; products: number; orders: nu
 export default function DashboardPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { currentStore, loading: storeContextLoading } = useStore()
   const [store, setStore] = useState<Store | null>(null)
   const [stats, setStats] = useState<Stats>({
     totalRevenue: 0,
@@ -87,6 +89,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // Wait for StoreContext to finish loading first
+      if (storeContextLoading) {
+        return
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) {
@@ -110,16 +117,32 @@ export default function DashboardPage() {
       // Set user role
       setUserRole(profile.role || 'owner')
 
-      // Fetch store data
+      // Use StoreContext to get the current store (works for both owners and members)
+      if (!currentStore?.store) {
+        // No store found in StoreContext - user has no stores (not owner or member)
+        // Only redirect if they haven't completed onboarding
+        if (!profile?.onboarding_completed) {
+          router.push("/onboarding")
+          return
+        }
+        // If onboarding is completed but no store, they need to create one
+        // But don't redirect automatically - let them see the empty state
+        return
+      }
+
+      // Fetch full store details using the store_id from StoreContext
       const { data: storeData, error: storeError } = await supabase
         .from("stores")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("id", currentStore.store_id)
         .single()
 
-      if (storeError || !storeData) {
-        // No store found, redirect to onboarding
-        router.push("/onboarding")
+      if (storeError) {
+        console.error("Error fetching store details:", storeError)
+        return
+      }
+
+      if (!storeData) {
         return
       }
 
@@ -130,7 +153,7 @@ export default function DashboardPage() {
         .from("custom_domains")
         .select("domain, status")
         .eq("store_id", storeData.id)
-        .single()
+        .maybeSingle()
 
       if (domainData) {
         setCustomDomain(domainData)
@@ -223,7 +246,7 @@ export default function DashboardPage() {
     }
 
     fetchData()
-  }, [supabase, router])
+  }, [storeContextLoading, currentStore, supabase, router])
 
   if (loading || !store) {
     return (

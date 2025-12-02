@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 
@@ -32,32 +32,72 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [currentStore, setCurrentStore] = useState<StoreMember | null>(null)
   const [stores, setStores] = useState<StoreMember[]>([])
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
   const router = useRouter()
+  const fetchingRef = useRef(false)
+  const hasFetchedRef = useRef(false)
 
   // Fetch all stores the user is a member of
-  const fetchStores = async () => {
+  const fetchStores = useCallback(async () => {
+    // Prevent concurrent fetches
+    if (fetchingRef.current) {
+      return
+    }
+    
+    fetchingRef.current = true
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await supabaseRef.current.auth.getUser()
       if (!user) {
         setLoading(false)
+        fetchingRef.current = false
         return
       }
 
       // Fetch stores where user is the owner
-      const { data: ownedStores } = await supabase
+      // Handle 406 errors gracefully (user might not have stores yet)
+      const { data: ownedStores, error: ownedStoresError } = await supabaseRef.current
         .from("stores")
         .select("id, name, logo_url, username, plan")
         .eq("user_id", user.id)
 
+      // If error exists, check if it's a 406 (Not Acceptable) - treat as empty result
+      // 406 errors can occur when RLS blocks queries for users with no stores
+      if (ownedStoresError) {
+        // Check if error is 406 (can be in status, code, or message)
+        const is406Error = 
+          (ownedStoresError as any).status === 406 ||
+          (ownedStoresError as any).code === '406' ||
+          String(ownedStoresError.message || '').includes('406')
+        
+        // Only log non-406 errors (406 means no stores found, which is expected for new users)
+        if (!is406Error) {
+          console.error("Error fetching owned stores:", ownedStoresError)
+        }
+      }
+
       // Get owned store IDs to exclude from member stores
-      const ownedStoreIds = new Set(ownedStores?.map((s) => s.id) || [])
+      const ownedStoreIds = new Set((ownedStores || [])?.map((s) => s.id) || [])
 
       // Fetch stores where user is a member (via store_members)
-      const { data: allMemberRecords } = await supabase
+      // Handle 406 errors gracefully (user might not be a member of any stores)
+      const { data: allMemberRecords, error: memberRecordsError } = await supabaseRef.current
         .from("store_members")
         .select("id, store_id, user_id, role")
         .eq("user_id", user.id)
+
+      // If error exists, check if it's a 406 (Not Acceptable) - treat as empty result
+      if (memberRecordsError) {
+        // Check if error is 406 (can be in status, code, or message)
+        const is406Error = 
+          (memberRecordsError as any).status === 406 ||
+          (memberRecordsError as any).code === '406' ||
+          String(memberRecordsError.message || '').includes('406')
+        
+        // Only log non-406 errors (406 means no member records found, which is expected)
+        if (!is406Error) {
+          console.error("Error fetching member records:", memberRecordsError)
+        }
+      }
 
       // Filter out member records for stores the user already owns
       const memberRecords = (allMemberRecords || []).filter(
@@ -68,10 +108,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       let memberStores: any[] = []
       if (memberRecords && memberRecords.length > 0) {
         const storeIds = memberRecords.map((m) => m.store_id)
-        const { data: memberStoreDetails } = await supabase
+        const { data: memberStoreDetails, error: memberStoreDetailsError } = await supabaseRef.current
           .from("stores")
           .select("id, name, logo_url, username, plan")
           .in("id", storeIds)
+
+        // If error exists, check if it's a 406 (Not Acceptable) - treat as empty result
+        if (memberStoreDetailsError) {
+          // Check if error is 406 (can be in status, code, or message)
+          const is406Error = 
+            (memberStoreDetailsError as any).status === 406 ||
+            (memberStoreDetailsError as any).code === '406' ||
+            String(memberStoreDetailsError.message || '').includes('406')
+          
+          // Only log non-406 errors (406 means no stores found, which can happen)
+          if (!is406Error) {
+            console.error("Error fetching member store details:", memberStoreDetailsError)
+          }
+        }
 
         if (memberStoreDetails) {
           memberStores = memberRecords.map((member) => {
@@ -154,19 +208,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(userStoreKey, selectedStore.store_id)
       }
 
-      setCurrentStore(selectedStore || null)
+      // Only update currentStore if it's different to prevent unnecessary re-renders
+      const newStore = selectedStore || null
+      setCurrentStore(prev => {
+        if (prev?.store_id === newStore?.store_id) {
+          return prev // Return same reference if store hasn't changed
+        }
+        return newStore
+      })
     } catch (error) {
       console.error("Error fetching stores:", error)
     } finally {
       setLoading(false)
+      fetchingRef.current = false
     }
-  }
+  }, [])
 
-  const switchStore = async (storeId: string) => {
+  const switchStore = useCallback(async (storeId: string) => {
     const store = stores.find((s) => s.store_id === storeId)
     if (store) {
       // Get current user to save store preference per user
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await supabaseRef.current.auth.getUser()
       if (user) {
         const userStoreKey = `currentStoreId_${user.id}`
         localStorage.setItem(userStoreKey, storeId)
@@ -175,15 +237,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Refresh the page to update all data
       router.refresh()
     }
-  }
+  }, [stores, router])
 
-  const refreshStores = async () => {
+  const refreshStores = useCallback(async () => {
+    if (fetchingRef.current) {
+      return
+    }
     setLoading(true)
     await fetchStores()
-  }
+  }, [fetchStores])
 
   useEffect(() => {
-    fetchStores()
+    // Only fetch once on mount - use a more robust check
+    if (!hasFetchedRef.current && !fetchingRef.current) {
+      hasFetchedRef.current = true
+      fetchStores()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (

@@ -20,11 +20,24 @@ export function SubscriptionExpiringBanner() {
       if (!user) return
 
       // Fetch store with subscription info
-      const { data: store } = await supabase
+      // Handle errors gracefully (user might not have a store yet)
+      const { data: store, error: storeError } = await supabase
         .from("stores")
         .select("plan, subscription_expires_at")
         .eq("user_id", user.id)
-        .single()
+        .maybeSingle()
+
+      // If error exists and it's not a 406 (which means no store found), log it
+      if (storeError) {
+        const is406Error = 
+          (storeError as any).status === 406 ||
+          (storeError as any).code === '406' ||
+          String(storeError.message || '').includes('406')
+        
+        if (!is406Error) {
+          console.error("Error fetching store for subscription banner:", storeError)
+        }
+      }
 
       if (!store || !store.subscription_expires_at || store.plan === 'free') {
         setShowBanner(false)
